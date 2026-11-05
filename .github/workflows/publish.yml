@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: read
-  # Provenance attestation now; tokenless trusted publishing (OIDC) once configured on npmjs.com.
+  # Trusted publishing (OIDC) and provenance.
   id-token: write
 
 concurrency:
@@ -39,8 +39,6 @@ jobs:
             echo "::error::Tag $GITHUB_REF_NAME does not match package.json version ($expected)"
             exit 1
           fi
+      # Authenticates via npm trusted publishing (OIDC); no token needed.
       # prepublishOnly runs typecheck, tests, build, publint and attw.
-      # NPM_TOKEN is only needed until trusted publishing is set up; npm tries OIDC first.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
