@@ -33,7 +33,10 @@ export interface FlockOptions {
   duration?: number;
   /** Top the flock up to this many cursors. Default: the `agents` limit. */
   size?: number;
-  /** Average speed along the orbit, px/s. Each cursor gets its own pace around it. Default 260. */
+  /**
+   * Average speed along the orbit, px/s. Each cursor gets its own pace around it. Default 260.
+   * Not affected by the engine's `speed`: the flock always moves at 1×.
+   */
   speed?: number;
   /**
    * How restless the flock is, 0…1. At 0 cursors ride steady circles; higher values add more
@@ -45,7 +48,7 @@ export interface FlockOptions {
 export interface SwarmOptions {
   /** Most cursors on screen at once. More join as more work becomes available. Default 8. */
   agents?: number;
-  /** Build speed multiplier. Default 1. */
+  /** Build speed multiplier. Default 1. The flock finale ignores it and always moves at 1×. */
   speed?: number;
   /** Show a name tag next to each cursor. Default true. */
   labels?: boolean;
@@ -172,6 +175,8 @@ export class SwarmEngine {
   options: Required<SwarmOptions>;
   /** Engine clock in ms, scaled by `speed`. */
   time = 0;
+  /** Wall clock in ms. The flock runs on this, so it moves at the same pace whatever `speed` is. */
+  realTime = 0;
   readonly live = new Set<Live>();
   agents: Agent[] = [];
 
@@ -299,6 +304,7 @@ export class SwarmEngine {
     const dt = clamp(now - this.last, 0, 50);
     this.last = now;
     this.time += dt * this.speed;
+    this.realTime += dt;
     this.rects.clear();
     this.textRects.clear();
     this.clips.clear();
@@ -323,7 +329,8 @@ export class SwarmEngine {
       }
     }
 
-    this.stepFlock((dt * this.speed) / 1000);
+    // `speed` is for building. The flock always moves at 1×.
+    this.stepFlock(dt / 1000);
     this.schedule(now);
     for (const l of this.live) l.measure?.();
     for (const l of this.live) l.apply();
@@ -516,8 +523,8 @@ export class SwarmEngine {
     // The automatic finale only forms once cursors have actually run out of work; flock() can start from zero.
     if (!flockers.length && !this.forcedFlock) return;
     this.listenPointer();
-    if (this.flockSince === null) this.flockSince = this.time;
-    if (this.time - this.flockSince > duration) {
+    if (this.flockSince === null) this.flockSince = this.realTime;
+    if (this.realTime - this.flockSince > duration) {
       this.dismiss();
       return;
     }
@@ -541,7 +548,7 @@ export class SwarmEngine {
     const still = performance.now() - this.pointerAt > 80;
     const vel = still ? { x: 0, y: 0 } : this.pointerVel;
     const { fleeRadius = 80, randomness = 0.6 } = this.options.flock;
-    const params = { fleeRadius, randomness, time: this.time / 1000 };
+    const params = { fleeRadius, randomness, time: this.realTime / 1000 };
     const step = Math.min(dt, 1 / 30);
     for (const a of this.agents) {
       if (a.state !== "flocking" || !a.boid) continue;

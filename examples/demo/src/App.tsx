@@ -251,11 +251,11 @@ export function App() {
   // Every swarm setting lives here, in code. Change a value and the swarm follows.
   return (
     <SwarmProvider
-      agents={10}
-      speed={1}
+      agents={15}
+      speed={3}
       detail="full"
       finale="flock"
-      flock={{ radius: 110, fleeRadius: 80, speed: 260, randomness: 0.6 }}
+      flock={{ radius: 140, fleeRadius: 110, speed: 260, randomness: 0.6 }}
     >
       <div className="page">
         <Swarm trigger="mount">

@@ -136,7 +136,7 @@ Ref handle (`SwarmHandle`): `build()`, `replay()`, `reveal()`.
 | Option                 | Default      |                                                                                     |
 | ---------------------- | ------------ | ----------------------------------------------------------------------------------- |
 | `agents`               | `8`          | Max cursors on screen. They join as work becomes available and fly off when idle    |
-| `speed`                | `1`          | Build speed multiplier                                                              |
+| `speed`                | `1`          | Build speed multiplier. The flock finale always moves at 1×                         |
 | `labels`               | `true`       | Name tags next to cursors                                                           |
 | `names`, `colors`      | built-in     | Cursor roster                                                                       |
 | `detail`               | `"full"`     | Default `detail` for every `<Swarm>` inside (see `<Swarm>` props)                   |
@@ -150,7 +150,7 @@ Ref handle (`SwarmHandle`): `build()`, `replay()`, `reveal()`.
 | Option       | Default          |                                                                                 |
 | ------------ | ---------------- | ------------------------------------------------------------------------------- |
 | `radius`     | `110`            | Orbit distance around the pointer, px. Each cursor picks its own lane around it |
-| `speed`      | `260`            | Average speed along the orbit, px/s (scaled by the provider's `speed` too)      |
+| `speed`      | `260`            | Average speed along the orbit, px/s. Independent of the provider's `speed`      |
 | `randomness` | `0.6`            | `0` to `1`: from steady circles to frequent dashes, lane changes and U-turns    |
 | `fleeRadius` | `80`             | How close the pointer can get before cursors scatter, px                        |
 | `duration`   | until next build | How long the flock stays before flying off, ms                                  |
