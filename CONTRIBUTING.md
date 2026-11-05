@@ -27,7 +27,4 @@ The demo depends on `"react-cursor-swarm": "*"`, which npm workspaces link to `p
 
 ## Release
 
-1. Bump `version` in `packages/react-cursor-swarm/package.json` and add an entry to its `CHANGELOG.md`.
-2. From `packages/react-cursor-swarm`, run `npm publish`. `prepublishOnly` typechecks, tests, builds and validates the package (publint + are-the-types-wrong) first.
-
-Before the first publish, add `repository`, `homepage`, `bugs` and `author` to the package's `package.json` once the GitHub repo exists.
+Releases publish from GitHub Actions when a `vX.Y.Z` tag is pushed. Don't run `npm publish` locally. Follow [RELEASING.md](RELEASING.md).
