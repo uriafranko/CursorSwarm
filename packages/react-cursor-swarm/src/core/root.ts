@@ -1,6 +1,8 @@
 import type { SwarmEngine } from "./engine";
-import { scan, type Detail, type Layer } from "./scan";
-import { Task, type RevealEffect } from "./task";
+import { scan } from "./scan";
+import type { Detail, Layer } from "./scan";
+import { Task } from "./task";
+import type { RevealEffect } from "./task";
 
 export const HIDE_ATTR = "data-swarm-hide";
 
@@ -28,15 +30,19 @@ export class SwarmRoot {
   private hidden = new Set<Element>();
   private finishing = false;
 
-  constructor(
-    readonly engine: SwarmEngine,
-    private getElements: () => Element[],
-    public options: RootOptions = {},
-  ) {
+  readonly engine: SwarmEngine;
+  private getElements: () => Element[];
+  public options: RootOptions;
+
+  constructor(engine: SwarmEngine, getElements: () => Element[], options: RootOptions = {}) {
+    this.engine = engine;
+    this.getElements = getElements;
+    this.options = options;
     engine.register(this);
   }
 
   /** Hide the component and queue its layers for the swarm. Call again to replay. */
+  // oxlint-disable-next-line complexity -- one pass over the scan: hide, queue, wire dependencies
   start() {
     this.reset();
     const els = this.getElements().filter((e) => e.isConnected);
@@ -62,7 +68,9 @@ export class SwarmRoot {
           clipped = cs.overflowX !== "visible" || cs.overflowY !== "visible";
           overflow.set(e, clipped);
         }
-        if (clipped && e !== document.body) out.push(e);
+        if (clipped && e !== document.body) {
+          out.push(e);
+        }
       }
       return out;
     };
@@ -77,27 +85,39 @@ export class SwarmRoot {
       const l = t.layer;
       if (l.parent) {
         const p = byLayer.get(l.parent);
-        if (p) t.deps.push(p);
+        if (p) {
+          t.deps.push(p);
+        }
       }
       if (l.kind === "dup" && l.master) {
         // A copy can only be made once the original is completely built.
         for (const m of this.tasks) {
-          if (m === t) continue;
-          if (m.el === l.master || l.master.contains(m.el)) t.deps.push(m);
+          if (m === t) {
+            continue;
+          }
+          if (m.el === l.master || l.master.contains(m.el)) {
+            t.deps.push(m);
+          }
         }
       }
     }
 
     for (const t of this.tasks) {
       if (t.layer.text) {
-        if (!t.layer.text.hide()) t.complete();
-      } else this.hide(t.el);
+        if (!t.layer.text.hide()) {
+          t.complete();
+        }
+      } else {
+        this.hide(t.el);
+      }
     }
 
     this.state = "building";
     this.engine.attach(this);
     this.options.onStart?.();
-    if (this.tasks.every((t) => t.state === "done")) this.finish();
+    if (this.tasks.every((t) => t.state === "done")) {
+      this.finish();
+    }
   }
 
   hide(el: Element) {
@@ -106,10 +126,14 @@ export class SwarmRoot {
   }
 
   unhide(el: Element, effect: RevealEffect = "none") {
-    if (!this.hidden.has(el)) return;
+    if (!this.hidden.has(el)) {
+      return;
+    }
     this.hidden.delete(el);
     el.removeAttribute(HIDE_ATTR);
-    if (effect === "none" || typeof (el as HTMLElement).animate !== "function") return;
+    if (effect === "none" || typeof (el as HTMLElement).animate !== "function") {
+      return;
+    }
     const ms = this.engine.ms(effect === "sweep" ? 560 : 300);
     if (effect === "sweep") {
       el.animate([{ clipPath: "inset(0 0 100% 0)" }, { clipPath: "inset(0 0 0% 0)" }], {
@@ -117,26 +141,32 @@ export class SwarmRoot {
         easing: "cubic-bezier(.3,.7,.2,1)",
       });
     } else {
-      const opacity = getComputedStyle(el).opacity;
+      const { opacity } = getComputedStyle(el);
       el.animate([{ opacity: 0 }, { opacity }], { duration: ms, easing: "ease-out" });
     }
   }
 
   taskDone() {
     this.engine.markStats();
-    if (this.state !== "building" || this.finishing) return;
+    if (this.state !== "building" || this.finishing) {
+      return;
+    }
     if (this.tasks.every((t) => t.state === "done")) {
       this.finishing = true;
       queueMicrotask(() => {
         this.finishing = false;
-        if (this.state === "building" && this.tasks.every((t) => t.state === "done")) this.finish();
+        if (this.state === "building" && this.tasks.every((t) => t.state === "done")) {
+          this.finish();
+        }
       });
     }
   }
 
   /** Skip the animation and show everything now. */
   reveal() {
-    if (this.state !== "building") return;
+    if (this.state !== "building") {
+      return;
+    }
     for (const t of this.tasks) {
       if (t.state !== "done") {
         t.cancel();
@@ -154,14 +184,20 @@ export class SwarmRoot {
   }
 
   private cleanup() {
-    for (const el of this.hidden) el.removeAttribute(HIDE_ATTR);
+    for (const el of this.hidden) {
+      el.removeAttribute(HIDE_ATTR);
+    }
     this.hidden.clear();
-    for (const t of this.tasks) t.layer.text?.release();
+    for (const t of this.tasks) {
+      t.layer.text?.release();
+    }
   }
 
   /** Cancel any build in progress and restore the component as-is. */
   reset() {
-    for (const t of this.tasks) t.cancel();
+    for (const t of this.tasks) {
+      t.cancel();
+    }
     this.cleanup();
     this.tasks = [];
     this.state = "idle";

@@ -1,21 +1,11 @@
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ElementType,
-  type HTMLAttributes,
-  type ReactNode,
-} from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties, ElementType, ForwardedRef, HTMLAttributes, ReactNode } from "react";
+
 import { SwarmRoot } from "../core/root";
 import type { Detail } from "../core/scan";
 import { useDefaultDetail, useSwarmEngine } from "./context";
 
-const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export type SwarmTrigger = "visible" | "mount" | "manual";
 
@@ -47,23 +37,21 @@ export interface SwarmProps extends Omit<HTMLAttributes<HTMLElement>, "children"
 
 export interface SwarmHandle {
   /** Start (or restart) the build now. */
-  build(): void;
+  build: () => void;
   /** Hide everything again and rebuild from scratch. */
-  replay(): void;
+  replay: () => void;
   /** Skip to the end. */
-  reveal(): void;
+  reveal: () => void;
 }
 
-function elementsOf(wrapper: HTMLElement): Element[] {
-  if (getComputedStyle(wrapper).display === "contents") return Array.from(wrapper.children);
+const elementsOf = (wrapper: HTMLElement): Element[] => {
+  if (getComputedStyle(wrapper).display === "contents") {
+    return [...wrapper.children];
+  }
   return [wrapper];
-}
+};
 
-/**
- * Wrap any component: it starts hidden and a swarm of cursors builds it, box by box and
- * keystroke by keystroke, on the real DOM. When done it is just your component again.
- */
-export const Swarm = forwardRef<SwarmHandle, SwarmProps>(function Swarm(
+const SwarmComponent = (
   {
     children,
     trigger = "visible",
@@ -78,18 +66,18 @@ export const Swarm = forwardRef<SwarmHandle, SwarmProps>(function Swarm(
     onBuildComplete,
     style,
     ...rest
-  },
-  ref,
-) {
+  }: SwarmProps,
+  ref: ForwardedRef<SwarmHandle>
+) => {
   const engine = useSwarmEngine();
   const defaultDetail = useDefaultDetail(engine);
   const detail = detailProp ?? defaultDetail;
   const wrapper = useRef<HTMLElement>(null);
   const root = useRef<SwarmRoot | null>(null);
   const [pending, setPending] = useState(!disabled);
-  const callbacks = useRef({ onBuildStart, onBuildComplete });
+  const callbacks = useRef({ onBuildComplete, onBuildStart });
   useIsoLayoutEffect(() => {
-    callbacks.current = { onBuildStart, onBuildComplete };
+    callbacks.current = { onBuildComplete, onBuildStart };
   });
   // With trigger="manual" nothing happens until `active` is true.
   const armed = trigger !== "manual" || !!active;
@@ -97,7 +85,9 @@ export const Swarm = forwardRef<SwarmHandle, SwarmProps>(function Swarm(
   const begin = useCallback(() => {
     const w = wrapper.current;
     const r = root.current;
-    if (!w || !r) return;
+    if (!w || !r) {
+      return;
+    }
     // Clear the pending style imperatively so the scan sees real visibility; React's
     // re-render below settles on the same value, all before the browser paints.
     w.style.visibility = "";
@@ -117,25 +107,28 @@ export const Swarm = forwardRef<SwarmHandle, SwarmProps>(function Swarm(
       detail,
       duplicates,
       maxLayers,
-      onStart: () => callbacks.current.onBuildStart?.(),
       onComplete: () => callbacks.current.onBuildComplete?.(),
+      onStart: () => callbacks.current.onBuildStart?.(),
     });
     root.current = r;
 
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    const scheduled: { timer?: ReturnType<typeof setTimeout> } = {};
     let io: IntersectionObserver | undefined;
     const go = () => {
-      if (delay > 0) timer = setTimeout(begin, delay);
-      else begin();
+      if (delay > 0) {
+        scheduled.timer = setTimeout(begin, delay);
+      } else {
+        begin();
+      }
     };
 
     if (!armed) {
       // manual and not active yet: stay hidden
-    } else if (trigger !== "visible" || typeof IntersectionObserver === "undefined") go();
-    else {
+    } else if (trigger !== "visible" || typeof IntersectionObserver === "undefined") {
+      go();
+    } else {
       const targets = elementsOf(w);
-      if (!targets.length) go();
-      else {
+      if (targets.length) {
         io = new IntersectionObserver(
           (entries) => {
             if (entries.some((e) => e.isIntersecting)) {
@@ -143,17 +136,23 @@ export const Swarm = forwardRef<SwarmHandle, SwarmProps>(function Swarm(
               go();
             }
           },
-          { rootMargin: "0px 0px -8% 0px", threshold: 0.01 },
+          { rootMargin: "0px 0px -8% 0px", threshold: 0.01 }
         );
-        for (const t of targets) io.observe(t);
+        for (const t of targets) {
+          io.observe(t);
+        }
+      } else {
+        go();
       }
     }
 
     return () => {
-      clearTimeout(timer);
+      clearTimeout(scheduled.timer);
       io?.disconnect();
       r.destroy();
-      if (root.current === r) root.current = null;
+      if (root.current === r) {
+        root.current = null;
+      }
     };
   }, [engine, disabled, trigger, armed, detail, duplicates, maxLayers, delay, begin]);
 
@@ -165,18 +164,29 @@ export const Swarm = forwardRef<SwarmHandle, SwarmProps>(function Swarm(
       reveal: () => {
         root.current?.reveal();
         setPending(false);
-        if (wrapper.current) wrapper.current.style.visibility = "";
+        if (wrapper.current) {
+          wrapper.current.style.visibility = "";
+        }
       },
     }),
-    [begin],
+    [begin]
   );
 
   const merged: CSSProperties = { display: "contents", ...style };
-  if (pending) merged.visibility = "hidden";
+  if (pending) {
+    merged.visibility = "hidden";
+  }
 
   return (
     <Tag ref={wrapper} data-swarm-root="" style={merged} {...rest}>
       {children}
     </Tag>
   );
-});
+};
+
+/**
+ * Wrap any component: it starts hidden and a swarm of cursors builds it, box by box and
+ * keystroke by keystroke, on the real DOM. When done it is just your component again.
+ */
+export const Swarm = forwardRef<SwarmHandle, SwarmProps>(SwarmComponent);
+Swarm.displayName = "Swarm";

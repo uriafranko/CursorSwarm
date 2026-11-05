@@ -1,5 +1,5 @@
-export { Swarm, type SwarmProps, type SwarmHandle, type SwarmTrigger } from "./react/Swarm";
-export { withSwarm, type WithSwarmOptions } from "./react/withSwarm";
+export { Swarm, type SwarmProps, type SwarmHandle, type SwarmTrigger } from "./react/swarm";
+export { withSwarm, type WithSwarmOptions } from "./react/with-swarm";
 export { SwarmProvider, useSwarmEngine, useSwarmStats, type SwarmProviderProps } from "./react/context";
 
 // Framework-agnostic core, for non-React use or custom integrations.

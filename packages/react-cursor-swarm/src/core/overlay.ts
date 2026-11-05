@@ -1,6 +1,7 @@
+// oxlint-disable max-classes-per-file -- the overlay visuals share one base class and only make sense together
+import type { Agent } from "./agent";
 import type { SwarmEngine, Live } from "./engine";
 import type { Task } from "./task";
-import type { Agent } from "./agent";
 import type { Box, Point } from "./util";
 
 const FONT = `ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
@@ -61,7 +62,7 @@ export class Overlay {
     this.agents = document.createElement("div");
     this.agents.className = "layer";
     shadow.append(style, this.visuals, this.agents);
-    document.body.appendChild(this.host);
+    document.body.append(this.host);
   }
 
   setZIndex(z: number) {
@@ -73,22 +74,25 @@ export class Overlay {
   }
 }
 
-export function div(cls: string, parent?: Element): HTMLDivElement {
+export const div = (cls: string, parent?: Element): HTMLDivElement => {
   const d = document.createElement("div");
   d.className = cls;
-  parent?.appendChild(d);
+  parent?.append(d);
   return d;
-}
+};
 
-export function place(el: HTMLElement, b: Box) {
+export const place = (el: HTMLElement, b: Box) => {
   el.style.transform = `translate3d(${b.x}px, ${b.y}px, 0)`;
   el.style.width = `${Math.max(0, b.w)}px`;
   el.style.height = `${Math.max(0, b.h)}px`;
-}
+};
 
-function boxFrom(a: Point, b: Point): Box {
-  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
-}
+const boxFrom = (a: Point, b: Point): Box => ({
+  h: Math.abs(b.y - a.y),
+  w: Math.abs(b.x - a.x),
+  x: Math.min(a.x, b.x),
+  y: Math.min(a.y, b.y),
+});
 
 /** Anything drawn on the overlay for a task. Re-laid out every frame from live element rects. */
 export abstract class Visual implements Live {
@@ -97,11 +101,12 @@ export abstract class Visual implements Live {
   private clip: Box | null = null;
   private lastClip = "";
 
-  constructor(
-    protected engine: SwarmEngine,
-    protected task: Task | null,
-    color: string,
-  ) {
+  protected engine: SwarmEngine;
+  protected task: Task | null;
+
+  constructor(engine: SwarmEngine, task: Task | null, color: string) {
+    this.engine = engine;
+    this.task = task;
     this.root = div("v", engine.overlayLayer());
     this.root.style.setProperty("--c", color);
     engine.live.add(this);
@@ -132,18 +137,22 @@ export abstract class Visual implements Live {
   protected abstract write(): void;
 
   fadeOut(ms = 380, delay = 0) {
-    if (this.dead) return;
+    if (this.dead) {
+      return;
+    }
     const anim = this.root.animate([{ opacity: 1 }, { opacity: 0 }], {
-      duration: this.engine.ms(ms),
       delay: this.engine.ms(delay),
-      fill: "forwards",
+      duration: this.engine.ms(ms),
       easing: "ease-out",
+      fill: "forwards",
     });
     anim.onfinish = () => this.destroy();
   }
 
   destroy() {
-    if (this.dead) return;
+    if (this.dead) {
+      return;
+    }
     this.dead = true;
     this.root.remove();
     this.engine.live.delete(this);
@@ -179,17 +188,21 @@ export class Selection extends Visual {
     super(engine, task, color);
     if (o.placeholder) {
       this.ph = div("a ph", this.root);
-      if (o.radius) this.ph.style.borderRadius = o.radius;
+      if (o.radius) {
+        this.ph.style.borderRadius = o.radius;
+      }
     }
     this.frame = div(`a ${o.className ?? "sel"}`, this.root);
     if (o.handles !== false) {
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 4; i += 1) {
         const h = div("a h", this.root);
         h.style.display = "none";
         this.handles.push(h);
       }
     }
-    if (o.badge) this.badge = div("a badge", this.root);
+    if (o.badge) {
+      this.badge = div("a badge", this.root);
+    }
   }
 
   drag(anchor: () => Point | null, agent: Agent) {
@@ -206,22 +219,25 @@ export class Selection extends Visual {
   }
 
   protected read() {
-    if (this.rect) this.b = this.rect();
-    else if (this.anchor && this.agent) {
+    if (this.rect) {
+      this.b = this.rect();
+    } else if (this.anchor && this.agent) {
       const a = this.anchor();
       this.b = a ? boxFrom(a, this.agent.pos) : null;
     }
   }
 
   protected write() {
-    const b = this.b;
+    const { b } = this;
     if (!b) {
       this.root.style.display = "none";
       return;
     }
     this.root.style.display = "";
     place(this.frame, b);
-    if (this.ph) place(this.ph, b);
+    if (this.ph) {
+      place(this.ph, b);
+    }
     if (this.pinned && this.handles.length) {
       const pts = [
         [b.x, b.y],
@@ -229,10 +245,10 @@ export class Selection extends Visual {
         [b.x, b.y + b.h],
         [b.x + b.w, b.y + b.h],
       ];
-      this.handles.forEach((h, i) => {
+      for (const [i, h] of this.handles.entries()) {
         h.style.display = "";
         h.style.transform = `translate3d(${pts[i][0] - 3.5}px, ${pts[i][1] - 3.5}px, 0)`;
-      });
+      }
     }
     if (this.badge) {
       const text = `${Math.round(b.w)} × ${Math.round(b.h)}`;
@@ -250,8 +266,8 @@ export class Selection extends Visual {
   fadePlaceholder(ms: number) {
     this.ph?.animate([{ opacity: 1 }, { opacity: 0 }], {
       duration: this.engine.ms(ms),
-      fill: "forwards",
       easing: "ease-out",
+      fill: "forwards",
     });
   }
 
@@ -259,8 +275,8 @@ export class Selection extends Visual {
   sweepPlaceholder(ms: number) {
     this.ph?.animate([{ clipPath: "inset(0 0 0 0)" }, { clipPath: "inset(100% 0 0 0)" }], {
       duration: this.engine.ms(ms),
-      fill: "forwards",
       easing: "cubic-bezier(.3,.7,.2,1)",
+      fill: "forwards",
     });
   }
 }
@@ -283,19 +299,23 @@ export class Caret extends Visual {
   }
 
   setTyping(on: boolean) {
-    if (on === this.typing) return;
+    if (on === this.typing) {
+      return;
+    }
     this.typing = on;
     this.el.classList.toggle("blink", !on);
   }
 
   protected read() {
     const r = this.source?.() ?? null;
-    if (r && r.h > 0) this.last = r;
+    if (r && r.h > 0) {
+      this.last = r;
+    }
     this.r = this.last;
   }
 
   protected write() {
-    const r = this.r;
+    const { r } = this;
     if (!r) {
       this.el.style.display = "none";
       return;
@@ -315,21 +335,20 @@ export class PenLine extends Visual {
   private b: Point | null = null;
   private pinned = false;
 
-  constructor(
-    engine: SwarmEngine,
-    task: Task,
-    color: string,
-    private from: () => Point | null,
-    private to: () => Point | null,
-  ) {
+  private from: () => Point | null;
+  private to: () => Point | null;
+
+  constructor(engine: SwarmEngine, task: Task, color: string, from: () => Point | null, to: () => Point | null) {
     super(engine, task, color);
+    this.from = from;
+    this.to = to;
     const ns = "http://www.w3.org/2000/svg";
     this.svg = document.createElementNS(ns, "svg") as SVGSVGElement;
     this.svg.setAttribute("class", "pen");
     this.line = document.createElementNS(ns, "line") as SVGLineElement;
     this.line.setAttribute("stroke", color);
     this.line.setAttribute("stroke-width", "1.5");
-    this.svg.appendChild(this.line);
+    this.svg.append(this.line);
     this.dots = [0, 1].map(() => {
       const r = document.createElementNS(ns, "rect") as SVGRectElement;
       r.setAttribute("width", "6");
@@ -337,10 +356,10 @@ export class PenLine extends Visual {
       r.setAttribute("fill", "#fff");
       r.setAttribute("stroke", color);
       r.setAttribute("stroke-width", "1.2");
-      this.svg.appendChild(r);
+      this.svg.append(r);
       return r;
     });
-    this.root.appendChild(this.svg);
+    this.root.append(this.svg);
   }
 
   pinEnd(to: () => Point | null) {
@@ -355,7 +374,9 @@ export class PenLine extends Visual {
 
   protected write() {
     const { a, b } = this;
-    if (!a || !b) return;
+    if (!a || !b) {
+      return;
+    }
     this.line.setAttribute("x1", String(a.x));
     this.line.setAttribute("y1", String(a.y));
     this.line.setAttribute("x2", String(b.x));
@@ -373,16 +394,15 @@ export class Ghost extends Visual {
   private el: HTMLDivElement;
   private b: Box | null = null;
 
-  constructor(
-    engine: SwarmEngine,
-    task: Task,
-    color: string,
-    public rect: () => Box | null,
-    radius?: string,
-  ) {
+  public rect: () => Box | null;
+
+  constructor(engine: SwarmEngine, task: Task, color: string, rect: () => Box | null, radius?: string) {
     super(engine, task, color);
+    this.rect = rect;
     this.el = div("a ghost", this.root);
-    if (radius) this.el.style.borderRadius = radius;
+    if (radius) {
+      this.el.style.borderRadius = radius;
+    }
   }
 
   protected read() {
@@ -406,13 +426,13 @@ export class Measure extends Visual {
   private seg: { x: number; y: number; w: number; h: number; gap: number } | null = null;
   private text = "";
 
-  constructor(
-    engine: SwarmEngine,
-    task: Task,
-    private a: () => Box | null,
-    private b: () => Box | null,
-  ) {
+  private a: () => Box | null;
+  private b: () => Box | null;
+
+  constructor(engine: SwarmEngine, task: Task, a: () => Box | null, b: () => Box | null) {
     super(engine, task, MEASURE);
+    this.a = a;
+    this.b = b;
     this.line = div("a mline", this.root);
     this.label = div("a badge mlabel", this.root);
   }
@@ -421,15 +441,22 @@ export class Measure extends Visual {
     const a = this.a();
     const b = this.b();
     this.seg = null;
-    if (!a || !b) return;
+    if (!a || !b) {
+      return;
+    }
     const overlapY = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
     const overlapX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
     const midY = overlapY > 0 ? Math.max(a.y, b.y) + overlapY / 2 : b.y + b.h / 2;
     const midX = overlapX > 0 ? Math.max(a.x, b.x) + overlapX / 2 : b.x + b.w / 2;
-    if (b.x >= a.x + a.w) this.seg = { x: a.x + a.w, y: midY, w: b.x - a.x - a.w, h: 1, gap: b.x - a.x - a.w };
-    else if (b.x + b.w <= a.x) this.seg = { x: b.x + b.w, y: midY, w: a.x - b.x - b.w, h: 1, gap: a.x - b.x - b.w };
-    else if (b.y >= a.y + a.h) this.seg = { x: midX, y: a.y + a.h, w: 1, h: b.y - a.y - a.h, gap: b.y - a.y - a.h };
-    else if (b.y + b.h <= a.y) this.seg = { x: midX, y: b.y + b.h, w: 1, h: a.y - b.y - b.h, gap: a.y - b.y - b.h };
+    if (b.x >= a.x + a.w) {
+      this.seg = { gap: b.x - a.x - a.w, h: 1, w: b.x - a.x - a.w, x: a.x + a.w, y: midY };
+    } else if (b.x + b.w <= a.x) {
+      this.seg = { gap: a.x - b.x - b.w, h: 1, w: a.x - b.x - b.w, x: b.x + b.w, y: midY };
+    } else if (b.y >= a.y + a.h) {
+      this.seg = { gap: b.y - a.y - a.h, h: b.y - a.y - a.h, w: 1, x: midX, y: a.y + a.h };
+    } else if (b.y + b.h <= a.y) {
+      this.seg = { gap: a.y - b.y - b.h, h: a.y - b.y - b.h, w: 1, x: midX, y: b.y + b.h };
+    }
   }
 
   protected write() {

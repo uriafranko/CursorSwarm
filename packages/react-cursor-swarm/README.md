@@ -117,33 +117,33 @@ const { agents, done, total, team, flocking } = useSwarmStats(); // for a progre
 
 ### `<Swarm>` props
 
-| Prop                              | Default     |                                                                                                                                                                                  |
-| --------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `trigger`                         | `"visible"` | `"visible"` builds when the component scrolls into view, `"mount"` builds right away, `"manual"` builds when `active` is true or you call `ref.build()`                          |
-| `active`                          |             | With `trigger="manual"`: stays hidden while false, builds each time it turns true                                                                                                |
-| `detail`                          | provider's  | `"full"`: boxes, media, lines, typed text, duplicates. `"boxes"`: no typing; text appears with its container. `"outline"`: one drag around the whole component, then it fades in |
-| `duplicates`                      | `true`      | Detect repeated siblings and ⌥-drag copies of the first one                                                                                                                      |
-| `delay`                           | `0`         | ms to wait before starting                                                                                                                                                       |
-| `maxLayers`                       | `300`       | Animated layers per component; anything past the cap appears with its parent                                                                                                     |
-| `disabled`                        | `false`     | Render children with no animation                                                                                                                                                |
-| `as`                              | `"div"`     | Wrapper element (`display: contents` unless you override `style`)                                                                                                                |
-| `onBuildStart`, `onBuildComplete` |             | Callbacks                                                                                                                                                                        |
+| Prop | Default |  |
+| --- | --- | --- |
+| `trigger` | `"visible"` | `"visible"` builds when the component scrolls into view, `"mount"` builds right away, `"manual"` builds when `active` is true or you call `ref.build()` |
+| `active` |  | With `trigger="manual"`: stays hidden while false, builds each time it turns true |
+| `detail` | provider's | `"full"`: boxes, media, lines, typed text, duplicates. `"boxes"`: no typing; text appears with its container. `"outline"`: one drag around the whole component, then it fades in |
+| `duplicates` | `true` | Detect repeated siblings and ⌥-drag copies of the first one |
+| `delay` | `0` | ms to wait before starting |
+| `maxLayers` | `300` | Animated layers per component; anything past the cap appears with its parent |
+| `disabled` | `false` | Render children with no animation |
+| `as` | `"div"` | Wrapper element (`display: contents` unless you override `style`) |
+| `onBuildStart`, `onBuildComplete` |  | Callbacks |
 
 Ref handle (`SwarmHandle`): `build()`, `replay()`, `reveal()`.
 
 ### `<SwarmProvider>` options
 
-| Option                 | Default      |                                                                                     |
-| ---------------------- | ------------ | ----------------------------------------------------------------------------------- |
-| `agents`               | `8`          | Max cursors on screen. They join as work becomes available and fly off when idle    |
-| `speed`                | `1`          | Build speed multiplier. The flock finale always moves at 1×                         |
-| `labels`               | `true`       | Name tags next to cursors                                                           |
-| `names`, `colors`      | built-in     | Cursor roster                                                                       |
-| `detail`               | `"full"`     | Default `detail` for every `<Swarm>` inside (see `<Swarm>` props)                   |
-| `respectReducedMotion` | `true`       | Users with `prefers-reduced-motion` get the finished component at once              |
-| `zIndex`               | `2147483000` | z-index of the cursor overlay                                                       |
-| `finale`               | `"leave"`    | What idle cursors do: `"leave"` flies them off screen, `"flock"` orbits the pointer |
-| `flock`                | `{}`         | Flock tuning, see below                                                             |
+| Option | Default |  |
+| --- | --- | --- |
+| `agents` | `8` | Max cursors on screen. They join as work becomes available and fly off when idle |
+| `speed` | `1` | Build speed multiplier. The flock finale always moves at 1× |
+| `labels` | `true` | Name tags next to cursors |
+| `names`, `colors` | built-in | Cursor roster |
+| `detail` | `"full"` | Default `detail` for every `<Swarm>` inside (see `<Swarm>` props) |
+| `respectReducedMotion` | `true` | Users with `prefers-reduced-motion` get the finished component at once |
+| `zIndex` | `2147483000` | z-index of the cursor overlay |
+| `finale` | `"leave"` | What idle cursors do: `"leave"` flies them off screen, `"flock"` orbits the pointer |
+| `flock` | `{}` | Flock tuning, see below |
 
 `flock` options:
 

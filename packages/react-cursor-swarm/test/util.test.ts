@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+
 import { alphaOf, intersect } from "../src/core/util";
 
-describe("alphaOf", () => {
+describe(alphaOf, () => {
   it.each([
     ["transparent", 0],
     ["rgb(1, 2, 3)", 1],
@@ -16,14 +17,26 @@ describe("alphaOf", () => {
   });
 });
 
-describe("intersect", () => {
+describe(intersect, () => {
   it("returns the overlap", () => {
-    expect(intersect({ x: 0, y: 0, w: 10, h: 10 }, { x: 5, y: 5, w: 10, h: 10 })).toEqual({ x: 5, y: 5, w: 5, h: 5 });
+    expect(intersect({ h: 10, w: 10, x: 0, y: 0 }, { h: 10, w: 10, x: 5, y: 5 })).toStrictEqual({
+      h: 5,
+      w: 5,
+      x: 5,
+      y: 5,
+    });
   });
+
   it("counts touching edges", () => {
-    expect(intersect({ x: 0, y: 0, w: 10, h: 10 }, { x: 10, y: 0, w: 5, h: 5 })).toEqual({ x: 10, y: 0, w: 0, h: 5 });
+    expect(intersect({ h: 10, w: 10, x: 0, y: 0 }, { h: 5, w: 5, x: 10, y: 0 })).toStrictEqual({
+      h: 5,
+      w: 0,
+      x: 10,
+      y: 0,
+    });
   });
+
   it("returns null when apart", () => {
-    expect(intersect({ x: 0, y: 0, w: 10, h: 10 }, { x: 20, y: 0, w: 5, h: 5 })).toBeNull();
+    expect(intersect({ h: 10, w: 10, x: 0, y: 0 }, { h: 5, w: 5, x: 20, y: 0 })).toBeNull();
   });
 });

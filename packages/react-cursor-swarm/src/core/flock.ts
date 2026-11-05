@@ -44,69 +44,80 @@ export interface FlockParams {
   rand?: () => number;
 }
 
-const SPRING = 2.2; // radial pull back onto the lane, per second
-const GRIP = 8; // how fast velocity follows the steering target while orbiting, per second
+// radial pull back onto the lane, per second
+const SPRING = 2.2;
+// how fast velocity follows the steering target while orbiting, per second
+const GRIP = 8;
 const FLEE_GRIP = 14;
-const FOLLOW = 0.75; // share of the pointer's motion the ring rides along with: round at a stroll, catchable at a dash
-const SEPARATION = 38; // px between cursors before they push apart
-const CRUISE = 1300; // max speed while orbiting or flying in
-const BOLT = 2000; // max speed while fleeing
+// share of the pointer's motion the ring rides along with: round at a stroll, catchable at a dash
+const FOLLOW = 0.75;
+// px between cursors before they push apart
+const SEPARATION = 38;
+// max speed while orbiting or flying in
+const CRUISE = 1300;
+// max speed while fleeing
+const BOLT = 2000;
 
 const TAU = Math.PI * 2;
 
 /** Smooth, never-repeating wobble in about -1…1: three sines at unrelated frequencies. */
-function wobble(t: number, a: number, b: number) {
-  return (Math.sin(t * 1.13 + a) + 0.6 * Math.sin(t * 2.37 + b) + 0.35 * Math.sin(t * 4.71 + a - b)) / 1.95;
-}
+const wobble = (t: number, a: number, b: number) =>
+  (Math.sin(t * 1.13 + a) + 0.6 * Math.sin(t * 2.37 + b) + 0.35 * Math.sin(t * 4.71 + a - b)) / 1.95;
 
-export function makeBoid(x: number, y: number, o: BoidOptions, rand: () => number = Math.random): Boid {
+export const makeBoid = (x: number, y: number, o: BoidOptions, rand: () => number = Math.random): Boid => {
   const radius = o.radius * (0.85 + rand() * 0.55);
   const dir = rand() < 0.75 ? 1 : -1;
   return {
-    x,
-    y,
+    base: radius,
+    boost: 0,
+    dir,
+    lane: radius,
+    next: -1,
+    radius,
+    seed: [rand() * TAU, rand() * TAU, rand() * TAU],
+    speed: o.speed * (0.75 + rand() * 0.55),
+    spin: dir,
+    tempo: 0.75 + rand() * 0.6,
     vx: 0,
     vy: 0,
-    radius,
-    base: radius,
-    lane: radius,
-    dir,
-    spin: dir,
-    speed: o.speed * (0.75 + rand() * 0.55),
-    boost: 0,
-    seed: [rand() * TAU, rand() * TAU, rand() * TAU],
-    tempo: 0.75 + rand() * 0.6,
-    next: -1,
+    x,
+    y,
   };
-}
+};
 
 /** A random change of mind: turn around, drift to another lane, or dash ahead. */
-function whim(b: Boid, rand: () => number, k: number) {
+const whim = (b: Boid, rand: () => number, k: number) => {
   const roll = rand();
-  if (roll < 0.25) b.dir = b.dir === 1 ? -1 : 1;
-  else if (roll < 0.6) b.lane = b.base * (1 + (rand() * 2 - 0.6) * 0.32 * k);
-  else b.boost = (0.4 + rand() * 0.6) * k;
-}
+  if (roll < 0.25) {
+    b.dir = b.dir === 1 ? -1 : 1;
+  } else if (roll < 0.6) {
+    b.lane = b.base * (1 + (rand() * 2 - 0.6) * 0.32 * k);
+  } else {
+    b.boost = (0.4 + rand() * 0.6) * k;
+  }
+};
 
 /**
  * One integration step: orbit the pointer on a round, slightly restless path, keep apart from
  * neighbours, and bolt away (harder when the pointer is moving toward the cursor) once it gets
  * within `fleeRadius`.
  */
-export function stepBoid(
+export const stepBoid = (
   b: Boid,
   pointer: Point,
   pointerVel: Point,
   flock: readonly Boid[],
   p: FlockParams,
-  dt: number,
-) {
+  dt: number
+) => {
   const rand = p.rand ?? Math.random;
   const k = Math.max(0, Math.min(1, p.randomness ?? 0.6));
 
   // Every few seconds each cursor changes its mind. More randomness, more often.
   if (b.next < 0 || (k > 0 && p.time >= b.next)) {
-    if (b.next >= 0) whim(b, rand, k);
+    if (b.next >= 0) {
+      whim(b, rand, k);
+    }
     b.next = p.time + (1.8 + rand() * 3.4) / (0.35 + k);
   }
   b.radius += (b.lane - b.radius) * Math.min(1, dt * 1.4);
@@ -143,7 +154,9 @@ export function stepBoid(
   }
 
   for (const o of flock) {
-    if (o === b) continue;
+    if (o === b) {
+      continue;
+    }
     const ox = b.x - o.x;
     const oy = b.y - o.y;
     const d = Math.hypot(ox, oy);
@@ -165,4 +178,4 @@ export function stepBoid(
   }
   b.x += b.vx * dt;
   b.y += b.vy * dt;
-}
+};

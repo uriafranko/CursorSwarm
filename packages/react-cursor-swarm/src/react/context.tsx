@@ -1,5 +1,8 @@
-import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { getDefaultEngine, SwarmEngine, type SwarmOptions, type SwarmStats } from "../core/engine";
+import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
+import type { ReactNode } from "react";
+
+import { getDefaultEngine, SwarmEngine } from "../core/engine";
+import type { SwarmOptions, SwarmStats } from "../core/engine";
 import type { Detail } from "../core/scan";
 
 const SwarmContext = createContext<SwarmEngine | null>(null);
@@ -14,7 +17,8 @@ export interface SwarmProviderProps extends SwarmOptions {
  * Optional. Shares one cursor pool and overlay between every <Swarm> inside it and lets you
  * configure the swarm. Without a provider, components use a default engine.
  */
-export function SwarmProvider({ children, ...options }: SwarmProviderProps) {
+export const SwarmProvider = ({ children, ...options }: SwarmProviderProps) => {
+  // oxlint-disable-next-line react/hook-use-state -- created once per provider, never replaced
   const [engine] = useState(() => new SwarmEngine(options));
   // Cheap and idempotent: the engine compares values, so inline arrays/objects are fine.
   useEffect(() => {
@@ -26,22 +30,18 @@ export function SwarmProvider({ children, ...options }: SwarmProviderProps) {
       <DetailContext.Provider value={options.detail}>{children}</DetailContext.Provider>
     </SwarmContext.Provider>
   );
-}
+};
 
 /** The engine for this subtree (from the nearest <SwarmProvider>, or the default one). */
-export function useSwarmEngine(): SwarmEngine {
-  return useContext(SwarmContext) ?? getDefaultEngine();
-}
+export const useSwarmEngine = (): SwarmEngine => useContext(SwarmContext) ?? getDefaultEngine();
 
 /** The `detail` a <Swarm> uses when it doesn't set its own. */
-export function useDefaultDetail(engine: SwarmEngine): Detail {
-  return useContext(DetailContext) ?? engine.options.detail;
-}
+export const useDefaultDetail = (engine: SwarmEngine): Detail => useContext(DetailContext) ?? engine.options.detail;
 
-const EMPTY: SwarmStats = { agents: 0, done: 0, total: 0, building: 0, team: [], flocking: false };
+const EMPTY: SwarmStats = { agents: 0, building: 0, done: 0, flocking: false, team: [], total: 0 };
 
 /** Live counts for building a HUD: cursors on screen, layers built / total. */
-export function useSwarmStats(): SwarmStats {
+export const useSwarmStats = (): SwarmStats => {
   const engine = useSwarmEngine();
   return useSyncExternalStore(engine.subscribe, engine.getStats, () => EMPTY);
-}
+};

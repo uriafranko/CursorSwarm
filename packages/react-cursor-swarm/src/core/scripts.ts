@@ -2,13 +2,14 @@ import type { Agent } from "./agent";
 import type { SwarmEngine } from "./engine";
 import { Caret, Ghost, Measure, PenLine, Selection } from "./overlay";
 import type { Task } from "./task";
-import { clamp, easeInOutCubic, easeInOutQuad, intersect, inView, rand, viewport, type Box, type Point } from "./util";
+import { clamp, easeInOutCubic, easeInOutQuad, intersect, inView, rand, viewport } from "./util";
+import type { Box, Point } from "./util";
 
 const at = (b: Box | null, fx: number, fy: number, dx = 0, dy = 0): Point | null =>
   b ? inView({ x: b.x + b.w * fx + dx, y: b.y + b.h * fy + dy }) : null;
 
 /** Crosshair drag with a live W × H badge, gray placeholder, then the real element fades (or sweeps) in. */
-async function drawBox(a: Agent, t: Task, e: SwarmEngine, effect: "fade" | "sweep") {
+const drawBox = async (a: Agent, t: Task, e: SwarmEngine, effect: "fade" | "sweep") => {
   const tok = t.token;
   const box = () => e.box(t.el);
   const tl = () => at(box(), 0, 0);
@@ -20,32 +21,52 @@ async function drawBox(a: Agent, t: Task, e: SwarmEngine, effect: "fade" | "swee
   const sel = new Selection(e, t, a.color, { badge: true, placeholder: true, radius: t.layer.radius }).drag(tl, a);
   const b0 = box();
   const size = b0 ? Math.sqrt(b0.w * b0.h) : 100;
-  await a.moveTo(br, tok, { dur: clamp(240 + size * 1.5, 300, 820), ease: easeInOutQuad, bend: rand(-0.05, 0.05) });
+  await a.moveTo(br, tok, { bend: rand(-0.05, 0.05), dur: clamp(240 + size * 1.5, 300, 820), ease: easeInOutQuad });
   sel.pin(box);
   await a.release(tok, 70);
 
-  if (effect === "sweep") sel.sweepPlaceholder(560);
-  else sel.fadePlaceholder(300);
+  if (effect === "sweep") {
+    sel.sweepPlaceholder(560);
+  } else {
+    sel.fadePlaceholder(300);
+  }
   t.reveal(effect);
   await e.wait(effect === "sweep" ? 260 : 160, tok);
   t.complete();
   a.setMode("arrow");
   sel.fadeOut(360, 220);
-}
+};
 
 /** Drag a text box with the I-beam, then type the real text in place with a caret. */
-async function typeText(a: Agent, t: Task, e: SwarmEngine) {
+const typeText = async (a: Agent, t: Task, e: SwarmEngine) => {
   const tok = t.token;
-  const tb = t.layer.text!;
+  const tb = t.layer.text;
+  if (!tb) {
+    throw new Error("swarm: text task without a text block");
+  }
   const fast = !!t.layer.fast;
   const rect = () => e.textBox(t);
   const padded = () => {
     const r = rect();
-    return r && { x: r.x - 2, y: r.y - 1, w: r.w + 4, h: r.h + 2 };
+    return r && { h: r.h + 2, w: r.w + 4, x: r.x - 2, y: r.y - 1 };
   };
 
   let frame: Selection;
-  if (!fast) {
+  if (fast) {
+    // Retyping inside a duplicate: click into the text and go.
+    await a.moveTo(
+      () => {
+        const c = tb.start();
+        return c ? inView({ x: c.x + 3, y: c.y + c.h / 2 }) : at(rect(), 0, 0.5);
+      },
+      tok,
+      { near: () => a.setMode("ibeam") }
+    );
+    a.setMode("ibeam");
+    await a.press(tok, 45);
+    await a.release(tok, 30);
+    frame = new Selection(e, t, a.color, { className: "tbox", handles: false }).pin(padded);
+  } else {
     const tl = () => at(padded(), 0, 0);
     const br = () => at(padded(), 1, 1);
     await a.moveTo(tl, tok, { near: () => a.setMode("ibeam") });
@@ -54,26 +75,12 @@ async function typeText(a: Agent, t: Task, e: SwarmEngine) {
     frame = new Selection(e, t, a.color, { className: "tbox", handles: false }).drag(tl, a);
     const r0 = rect();
     await a.moveTo(br, tok, {
+      bend: rand(-0.04, 0.04),
       dur: clamp(160 + (r0?.w ?? 100) * 0.55, 200, 520),
       ease: easeInOutQuad,
-      bend: rand(-0.04, 0.04),
     });
     frame.pin(padded);
     await a.release(tok, 60);
-  } else {
-    // Retyping inside a duplicate: click into the text and go.
-    await a.moveTo(
-      () => {
-        const c = tb.start();
-        return c ? inView({ x: c.x + 3, y: c.y + c.h / 2 }) : at(rect(), 0, 0.5);
-      },
-      tok,
-      { near: () => a.setMode("ibeam") },
-    );
-    a.setMode("ibeam");
-    await a.press(tok, 45);
-    await a.release(tok, 30);
-    frame = new Selection(e, t, a.color, { className: "tbox", handles: false }).pin(padded);
   }
 
   const caret = new Caret(e, t, a.color);
@@ -87,11 +94,17 @@ async function typeText(a: Agent, t: Task, e: SwarmEngine) {
   const base = fast ? 20 : 34;
   while (i < n - 1) {
     i = Math.min(n - 1, i + chunk);
-    if (!tb.show(i)) break;
+    if (!tb.show(i)) {
+      break;
+    }
     const ch = tb.charAt(i);
     let d = base * rand(0.55, 1.45);
-    if (ch === " ") d *= 1.25;
-    else if (/[.,!?;:]/.test(ch)) d *= 2.2;
+    if (ch === " ") {
+      d *= 1.25;
+    } else if (/[.,!?;:]/u.test(ch)) {
+      d *= 2.2;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- keystrokes are typed one after another
     await e.wait(d, tok);
   }
   tb.release();
@@ -100,42 +113,49 @@ async function typeText(a: Agent, t: Task, e: SwarmEngine) {
   a.setMode("arrow");
   frame.fadeOut(300, 160);
   caret.fadeOut(200, 420);
-}
+};
 
 /** Pen tool: click an anchor, rubber-band to the other end, click again. Used for single-side borders and <hr>. */
-async function penLine(a: Agent, t: Task, e: SwarmEngine) {
+const penLine = async (a: Agent, t: Task, e: SwarmEngine) => {
   const tok = t.token;
   const side = t.layer.side ?? "bottom";
   const bw = t.layer.borderWidth ?? 1;
   const ends = (): [Point, Point] | null => {
     const b = e.box(t.el);
-    if (!b) return null;
+    if (!b) {
+      return null;
+    }
     switch (side) {
-      case "top":
+      case "top": {
         return [
           { x: b.x, y: b.y + bw / 2 },
           { x: b.x + b.w, y: b.y + bw / 2 },
         ];
-      case "bottom":
+      }
+      case "bottom": {
         return [
           { x: b.x, y: b.y + b.h - bw / 2 },
           { x: b.x + b.w, y: b.y + b.h - bw / 2 },
         ];
-      case "left":
+      }
+      case "left": {
         return [
           { x: b.x + bw / 2, y: b.y },
           { x: b.x + bw / 2, y: b.y + b.h },
         ];
-      case "right":
+      }
+      case "right": {
         return [
           { x: b.x + b.w - bw / 2, y: b.y },
           { x: b.x + b.w - bw / 2, y: b.y + b.h },
         ];
-      default:
+      }
+      default: {
         return [
           { x: b.x, y: b.y + b.h / 2 },
           { x: b.x + b.w, y: b.y + b.h / 2 },
         ];
+      }
     }
   };
   const p = () => {
@@ -154,7 +174,7 @@ async function penLine(a: Agent, t: Task, e: SwarmEngine) {
   const line = new PenLine(e, t, a.color, p, () => a.pos);
   const s0 = ends();
   const len = s0 ? Math.hypot(s0[1].x - s0[0].x, s0[1].y - s0[0].y) : 100;
-  await a.moveTo(q, tok, { dur: clamp(220 + len * 0.7, 280, 760), ease: easeInOutQuad, bend: 0 });
+  await a.moveTo(q, tok, { bend: 0, dur: clamp(220 + len * 0.7, 280, 760), ease: easeInOutQuad });
   line.pinEnd(q);
   await a.press(tok, 50);
   await a.release(tok, 30);
@@ -163,16 +183,21 @@ async function penLine(a: Agent, t: Task, e: SwarmEngine) {
   t.complete();
   a.setMode("arrow");
   line.fadeOut(320, 120);
-}
+};
 
 /** Select the original, ⌥-drag a copy into place with live spacing measurements. */
-async function duplicate(a: Agent, t: Task, e: SwarmEngine) {
+const duplicate = async (a: Agent, t: Task, e: SwarmEngine) => {
   const tok = t.token;
-  const master = t.layer.master!;
+  const { master } = t.layer;
+  if (!master) {
+    throw new Error("swarm: duplicate task without a master");
+  }
   const mBox = () => e.box(master);
   const dBox = () => e.box(t.el);
   const mb = mBox();
-  if (!mb || mb.w * mb.h === 0 || !intersect(mb, viewport())) return drawBox(a, t, e, "fade");
+  if (!mb || mb.w * mb.h === 0 || !intersect(mb, viewport())) {
+    return drawBox(a, t, e, "fade");
+  }
 
   const gx = mb.w * rand(0.3, 0.7);
   const gy = Math.min(mb.h * rand(0.25, 0.6), 64);
@@ -188,7 +213,7 @@ async function duplicate(a: Agent, t: Task, e: SwarmEngine) {
 
   const ghostBox = (): Box | null => {
     const b = mBox();
-    return b && { x: a.x - gx, y: a.y - gy, w: b.w, h: b.h };
+    return b && { h: b.h, w: b.w, x: a.x - gx, y: a.y - gy };
   };
   const ghost = new Ghost(e, t, a.color, ghostBox, t.layer.radius);
   const meas = new Measure(e, t, mBox, ghostBox);
@@ -199,9 +224,9 @@ async function duplicate(a: Agent, t: Task, e: SwarmEngine) {
   const d0 = target();
   const dist = d0 ? Math.hypot(d0.x - a.x, d0.y - a.y) : 200;
   await a.moveTo(target, tok, {
+    bend: rand(-0.08, 0.08),
     dur: clamp(300 + dist * 0.55, 380, 900),
     ease: easeInOutCubic,
-    bend: rand(-0.08, 0.08),
   });
   ghost.rect = dBox;
   await a.release(tok, 60);
@@ -213,19 +238,28 @@ async function duplicate(a: Agent, t: Task, e: SwarmEngine) {
   t.complete();
   a.setMode("arrow");
   ghost.fadeOut(300, 100);
-}
+};
 
-export function runScript(a: Agent, t: Task, e: SwarmEngine): Promise<void> {
+export const runScript = (a: Agent, t: Task, e: SwarmEngine): Promise<void> => {
   switch (t.kind) {
-    case "box":
+    case "box": {
       return drawBox(a, t, e, "fade");
-    case "media":
+    }
+    case "media": {
       return drawBox(a, t, e, "sweep");
-    case "line":
+    }
+    case "line": {
       return penLine(a, t, e);
-    case "text":
+    }
+    case "text": {
       return typeText(a, t, e);
-    case "dup":
+    }
+    case "dup": {
       return duplicate(a, t, e);
+    }
+    default: {
+      const kind: never = t.kind;
+      return Promise.reject(new Error(`swarm: unknown layer kind ${String(kind)}`));
+    }
   }
-}
+};

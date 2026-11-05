@@ -1,29 +1,25 @@
 {
   "name": "react-cursor-swarm-monorepo",
   "private": true,
-  "type": "module",
   "workspaces": [
     "packages/*",
     "examples/*"
   ],
+  "type": "module",
   "scripts": {
     "dev": "npm run build -w react-cursor-swarm && concurrently -k -n lib,demo -c blue,magenta \"npm run dev -w react-cursor-swarm\" \"npm run dev -w react-cursor-swarm-demo\"",
     "build": "npm run build --workspaces --if-present",
     "test": "npm test -w react-cursor-swarm",
-    "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "lint": "ultracite check",
+    "fix": "ultracite fix",
     "typecheck": "npm run build -w react-cursor-swarm && npm run typecheck --workspaces --if-present",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run check:package -w react-cursor-swarm"
+    "check": "npm run lint && npm run typecheck && npm test && npm run check:package -w react-cursor-swarm"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
     "concurrently": "^10.0.6",
-    "eslint": "^10.14.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.14.0",
-    "prettier": "^3.9.10",
+    "oxfmt": "^0.75.0",
+    "oxlint": "^1.91.0",
     "typescript": "~5.9.3",
-    "typescript-eslint": "^8.72.1"
+    "ultracite": "^8.1.1"
   }
 }

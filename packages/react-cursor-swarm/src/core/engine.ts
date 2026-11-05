@@ -1,25 +1,14 @@
 import { Agent } from "./agent";
 import { stepBoid } from "./flock";
 import { Overlay } from "./overlay";
-import { HIDE_ATTR, type SwarmRoot } from "./root";
+import { HIDE_ATTR } from "./root";
+import type { SwarmRoot } from "./root";
 import type { Detail } from "./scan";
 import { runScript } from "./scripts";
 import type { Task } from "./task";
 import { HIGHLIGHT_NAME } from "./text";
-import {
-  Cancelled,
-  clamp,
-  inflate,
-  intersect,
-  isBrowser,
-  rand,
-  shuffle,
-  toBox,
-  viewport,
-  type Box,
-  type Point,
-  type Token,
-} from "./util";
+import { CancelledError, clamp, inflate, intersect, isBrowser, rand, shuffle, toBox, viewport } from "./util";
+import type { Box, Point, Token } from "./util";
 
 /** What idle cursors do once there is nothing on screen left to build. */
 export type Finale = "leave" | "flock";
@@ -90,8 +79,8 @@ export interface SwarmStats {
 
 /** Anything re-laid out every frame (cursors, selections, carets...). */
 export interface Live {
-  measure?(): void;
-  apply(): void;
+  measure?: () => void;
+  apply: () => void;
 }
 
 interface Anim {
@@ -143,26 +132,28 @@ const GLOBAL_CSS = `
 `;
 
 let cssInjected = false;
-function injectGlobalCss() {
-  if (cssInjected || !isBrowser) return;
+const injectGlobalCss = () => {
+  if (cssInjected || !isBrowser) {
+    return;
+  }
   cssInjected = true;
   const style = document.createElement("style");
   style.setAttribute("data-swarm-styles", "");
   style.textContent = GLOBAL_CSS;
-  document.head.appendChild(style);
-}
+  document.head.append(style);
+};
 
 const defaults = (o: SwarmOptions): Required<SwarmOptions> => ({
   agents: o.agents ?? 8,
-  speed: o.speed ?? 1,
-  labels: o.labels ?? true,
-  names: o.names?.length ? o.names : DEFAULT_NAMES,
   colors: o.colors?.length ? o.colors : DEFAULT_COLORS,
   detail: o.detail ?? "full",
-  respectReducedMotion: o.respectReducedMotion ?? true,
-  zIndex: o.zIndex ?? 2147483000,
   finale: o.finale ?? "leave",
   flock: o.flock ?? {},
+  labels: o.labels ?? true,
+  names: o.names?.length ? o.names : DEFAULT_NAMES,
+  respectReducedMotion: o.respectReducedMotion ?? true,
+  speed: o.speed ?? 1,
+  zIndex: o.zIndex ?? 2_147_483_000,
 });
 
 const LINGER = 1300;
@@ -171,6 +162,21 @@ const LINGER = 1300;
  * Framework-agnostic core. One engine owns one overlay and one pool of cursors that is
  * shared by every component it builds, so cursors hop between components on screen.
  */
+/** Index of the task to take next: top-down first, then whatever is closest to (x, y). */
+const pickBest = (x: number, y: number, list: { task: Task; box: Box }[]) => {
+  let bi = 0;
+  let bs = Infinity;
+  for (const [i, { box }] of list.entries()) {
+    const d = Math.hypot(box.x - x, box.y - y);
+    const s = Math.max(0, box.y) + d * 0.5 + Math.random() * 30;
+    if (s < bs) {
+      bs = s;
+      bi = i;
+    }
+  }
+  return bi;
+};
+
 export class SwarmEngine {
   options: Required<SwarmOptions>;
   /** Engine clock in ms, scaled by `speed`. */
@@ -194,7 +200,7 @@ export class SwarmEngine {
   private textRects = new Map<Task, Box | null>();
   private clips = new Map<Task, Box | null>();
   private listeners = new Set<() => void>();
-  private stats: SwarmStats = { agents: 0, done: 0, total: 0, building: 0, team: [], flocking: false };
+  private stats: SwarmStats = { agents: 0, building: 0, done: 0, flocking: false, team: [], total: 0 };
   private statsDirty = false;
   private pointer: Point | null = null;
   private pointerVel: Point = { x: 0, y: 0 };
@@ -213,10 +219,18 @@ export class SwarmEngine {
     const prev = this.options;
     const next = defaults(options);
     this.options = next;
-    if (prev.names.join("\u0000") !== next.names.join("\u0000")) this.names = shuffle(next.names);
-    if (prev.zIndex !== next.zIndex) this.overlay?.setZIndex(next.zIndex);
-    if (next.finale === "flock" && this.roots.size) this.listenPointer();
-    if (prev.agents !== next.agents) this.rescheduleNow();
+    if (prev.names.join("\u0000") !== next.names.join("\u0000")) {
+      this.names = shuffle(next.names);
+    }
+    if (prev.zIndex !== next.zIndex) {
+      this.overlay?.setZIndex(next.zIndex);
+    }
+    if (next.finale === "flock" && this.roots.size) {
+      this.listenPointer();
+    }
+    if (prev.agents !== next.agents) {
+      this.rescheduleNow();
+    }
   }
 
   setSpeed(speed: number) {
@@ -243,7 +257,9 @@ export class SwarmEngine {
 
   private rescheduleNow() {
     this.nextSchedule = 0;
-    if (this.agents.length || this.roots.size) this.kick();
+    if (this.agents.length || this.roots.size) {
+      this.kick();
+    }
   }
 
   /** Convert a 1×-speed duration to real milliseconds (for CSS / Web Animations). */
@@ -282,9 +298,12 @@ export class SwarmEngine {
 
   /** Run `fn(k)` every frame for `dur` engine-ms (k goes 0→1); resolves at the end, rejects if cancelled. */
   animate(dur: number, token: Token, fn?: (k: number) => void): Promise<void> {
-    if (token.cancelled) return Promise.reject(new Cancelled());
+    if (token.cancelled) {
+      return Promise.reject(new CancelledError());
+    }
+    // oxlint-disable-next-line promise/avoid-new -- settled by the frame loop, not by a callback API
     return new Promise((resolve, reject) => {
-      this.anims.push({ start: this.time, dur, token, fn, resolve, reject });
+      this.anims.push({ dur, fn, reject, resolve, start: this.time, token });
       this.kick();
     });
   }
@@ -294,7 +313,9 @@ export class SwarmEngine {
   }
 
   private kick() {
-    if (this.raf || !isBrowser) return;
+    if (this.raf || !isBrowser) {
+      return;
+    }
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.tick);
   }
@@ -314,26 +335,33 @@ export class SwarmEngine {
       this.anims = [];
       for (const a of list) {
         if (a.token.cancelled) {
-          a.reject(new Cancelled());
+          a.reject(new CancelledError());
           continue;
         }
         const k = a.dur <= 0 ? 1 : Math.min(1, (this.time - a.start) / a.dur);
         try {
           a.fn?.(k);
-        } catch (err) {
-          a.reject(err);
+        } catch (error) {
+          a.reject(error);
           continue;
         }
-        if (k >= 1) a.resolve();
-        else this.anims.push(a);
+        if (k >= 1) {
+          a.resolve();
+        } else {
+          this.anims.push(a);
+        }
       }
     }
 
     // `speed` is for building. The flock always moves at 1×.
     this.stepFlock(dt / 1000);
     this.schedule(now);
-    for (const l of this.live) l.measure?.();
-    for (const l of this.live) l.apply();
+    for (const l of this.live) {
+      l.measure?.();
+    }
+    for (const l of this.live) {
+      l.apply();
+    }
     this.flushStats();
 
     if (this.anims.length || this.agents.length || this.roots.size || this.live.size) {
@@ -346,7 +374,9 @@ export class SwarmEngine {
   box(el: Element): Box | null {
     let b = this.rects.get(el);
     if (!b) {
-      if (!el.isConnected) return null;
+      if (!el.isConnected) {
+        return null;
+      }
       b = toBox(el.getBoundingClientRect());
       this.rects.set(el, b);
     }
@@ -354,7 +384,10 @@ export class SwarmEngine {
   }
 
   textBox(task: Task): Box | null {
-    if (this.textRects.has(task)) return this.textRects.get(task)!;
+    const cached = this.textRects.get(task);
+    if (cached !== undefined) {
+      return cached;
+    }
     const b = task.layer.text?.rect() ?? null;
     this.textRects.set(task, b);
     return b;
@@ -362,15 +395,22 @@ export class SwarmEngine {
 
   /** Visible region of a task after its clipping ancestors (scroll containers, overflow: hidden). */
   clipFor(task: Task): Box | null {
-    if (!task.clipEls.length) return null;
-    if (this.clips.has(task)) return this.clips.get(task)!;
+    if (!task.clipEls.length) {
+      return null;
+    }
+    const cached = this.clips.get(task);
+    if (cached) {
+      return cached;
+    }
     let c: Box | null = viewport();
     for (const el of task.clipEls) {
       const b = this.box(el);
-      if (!b) continue;
-      c = c && intersect(c, b);
+      if (!b) {
+        continue;
+      }
+      c &&= intersect(c, b);
     }
-    const out = c ?? { x: 0, y: 0, w: 0, h: 0 };
+    const out = c ?? { h: 0, w: 0, x: 0, y: 0 };
     this.clips.set(task, out);
     return out;
   }
@@ -381,11 +421,17 @@ export class SwarmEngine {
 
   private onScreen(task: Task): Box | null {
     const b = this.targetBox(task);
-    if (!b) return null;
+    if (!b) {
+      return null;
+    }
     let r = intersect(b, inflate(viewport(), 24));
-    if (!r) return null;
+    if (!r) {
+      return null;
+    }
     const c = this.clipFor(task);
-    if (c) r = intersect(r, inflate(c, 24));
+    if (c) {
+      r = intersect(r, inflate(c, 24));
+    }
     return r ? b : null;
   }
 
@@ -401,29 +447,41 @@ export class SwarmEngine {
 
   attach(root: SwarmRoot) {
     this.ensureOverlay();
-    if (this.options.finale === "flock") this.listenPointer();
+    if (this.options.finale === "flock") {
+      this.listenPointer();
+    }
     this.roots.add(root);
     this.markStats();
     this.kick();
   }
 
   detach(root: SwarmRoot) {
-    if (this.roots.delete(root)) this.markStats();
+    if (this.roots.delete(root)) {
+      this.markStats();
+    }
   }
 
   /** Rebuild every component that has already been built (or is building). */
   replayAll() {
-    for (const r of this.registered) if (r.state !== "idle") r.start();
+    for (const r of this.registered) {
+      if (r.state !== "idle") {
+        r.start();
+      }
+    }
   }
 
   /** Finish every build immediately. */
   revealAll() {
-    for (const r of Array.from(this.roots)) r.reveal();
+    for (const r of [...this.roots]) {
+      r.reveal();
+    }
   }
 
   /** Gather the cursors around the pointer now, even if `finale` is `leave`. */
   flock() {
-    if (this.reducedMotion()) return;
+    if (this.reducedMotion()) {
+      return;
+    }
     this.forcedFlock = true;
     this.dismissed = false;
     this.nextSchedule = 0;
@@ -436,7 +494,11 @@ export class SwarmEngine {
     this.forcedFlock = false;
     this.dismissed = true;
     this.flockSince = null;
-    for (const a of this.agents.slice()) if (a.state === "idle" || a.state === "flocking") a.leave();
+    for (const a of [...this.agents]) {
+      if (a.state === "idle" || a.state === "flocking") {
+        a.leave();
+      }
+    }
   }
 
   /** True while cursors are orbiting the pointer. */
@@ -450,25 +512,32 @@ export class SwarmEngine {
 
   // ---- scheduling ----------------------------------------------------------
 
+  // oxlint-disable-next-line complexity -- the per-frame scheduler; its steps read top to bottom
   private schedule(now: number) {
-    if (now < this.nextSchedule) return;
+    if (now < this.nextSchedule) {
+      return;
+    }
     this.nextSchedule = now + 80;
 
     const ready: { task: Task; box: Box }[] = [];
     for (const root of this.roots) {
       for (const task of root.tasks) {
-        if (task.state !== "waiting" || !task.depsDone()) continue;
+        if (task.state !== "waiting" || !task.depsDone()) {
+          continue;
+        }
         if (!task.alive()) {
           task.skip();
           continue;
         }
         const box = this.onScreen(task);
-        if (!box) continue;
+        if (!box) {
+          continue;
+        }
         if (box.w * box.h === 0 && task.kind !== "line") {
           task.skip();
           continue;
         }
-        ready.push({ task, box });
+        ready.push({ box, task });
       }
     }
 
@@ -484,27 +553,39 @@ export class SwarmEngine {
     // newest first. A flock is allowed to grow to `flock.size` even if that's bigger.
     let active = this.agents.filter((a) => a.state !== "leaving").length;
     const cap = flockOn ? Math.max(this.maxAgents, this.flockSize) : this.maxAgents;
-    while (active > cap && free.length) {
-      free.pop()!.leave();
-      active--;
+    while (active > cap) {
+      const extra = free.pop();
+      if (!extra) {
+        break;
+      }
+      extra.leave();
+      active -= 1;
     }
 
-    while (ready.length && free.length) {
-      const agent = free.shift()!;
-      agent.run(ready.splice(this.best(agent.x, agent.y, ready), 1)[0].task);
+    while (ready.length) {
+      const agent = free.shift();
+      if (!agent) {
+        break;
+      }
+      const [next] = ready.splice(pickBest(agent.x, agent.y, ready), 1);
+      agent.run(next.task);
     }
 
     if (ready.length && active < this.maxAgents && now - this.lastSpawn > 70) {
       this.lastSpawn = now;
-      const pick = ready.splice(this.best(window.innerWidth / 2, 0, ready), 1)[0];
+      const [pick] = ready.splice(pickBest(window.innerWidth / 2, 0, ready), 1);
       this.spawn(pick.box).run(pick.task);
     }
 
-    if (flockOn) this.scheduleFlock(now, free, active);
-    else {
+    if (flockOn) {
+      this.scheduleFlock(now, free, active);
+    } else {
       for (const a of free) {
-        if (a.state === "flocking" || this.time - a.idleSince > LINGER) a.leave();
-        else if (this.time - a.idleSince > 250) a.wander();
+        if (a.state === "flocking" || this.time - a.idleSince > LINGER) {
+          a.leave();
+        } else if (this.time - a.idleSince > 250) {
+          a.wander();
+        }
       }
     }
   }
@@ -517,13 +598,21 @@ export class SwarmEngine {
     const { radius = 110, speed = 260, duration = Infinity } = this.options.flock;
     const size = this.flockSize;
     const orbit = { radius, speed };
-    for (const a of free) if (a.state === "idle" && this.time - a.idleSince > 160) a.startFlock(orbit);
+    for (const a of free) {
+      if (a.state === "idle" && this.time - a.idleSince > 160) {
+        a.startFlock(orbit);
+      }
+    }
 
     const flockers = this.agents.filter((a) => a.state === "flocking");
     // The automatic finale only forms once cursors have actually run out of work; flock() can start from zero.
-    if (!flockers.length && !this.forcedFlock) return;
+    if (!flockers.length && !this.forcedFlock) {
+      return;
+    }
     this.listenPointer();
-    if (this.flockSince === null) this.flockSince = this.realTime;
+    if (this.flockSince === null) {
+      this.flockSince = this.realTime;
+    }
     if (this.realTime - this.flockSince > duration) {
       this.dismiss();
       return;
@@ -533,7 +622,7 @@ export class SwarmEngine {
     if (!working && active < size && now - this.lastSpawn > 100) {
       this.lastSpawn = now;
       const p = this.pointer ?? { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-      this.spawn({ x: p.x, y: p.y, w: 0, h: 0 }).startFlock(orbit);
+      this.spawn({ h: 0, w: 0, x: p.x, y: p.y }).startFlock(orbit);
     }
   }
 
@@ -541,8 +630,14 @@ export class SwarmEngine {
 
   private stepFlock(dt: number) {
     const flock = [];
-    for (const a of this.agents) if (a.state === "flocking" && a.boid) flock.push(a.boid);
-    if (!flock.length || dt <= 0) return;
+    for (const a of this.agents) {
+      if (a.state === "flocking" && a.boid) {
+        flock.push(a.boid);
+      }
+    }
+    if (!flock.length || dt <= 0) {
+      return;
+    }
     const center = this.pointer ?? { x: window.innerWidth / 2, y: window.innerHeight / 2 };
     // The pointer's velocity decays when it stops moving (pointermove only fires on motion).
     const still = performance.now() - this.pointerAt > 80;
@@ -551,7 +646,9 @@ export class SwarmEngine {
     const params = { fleeRadius, randomness, time: this.realTime / 1000 };
     const step = Math.min(dt, 1 / 30);
     for (const a of this.agents) {
-      if (a.state !== "flocking" || !a.boid) continue;
+      if (a.state !== "flocking" || !a.boid) {
+        continue;
+      }
       stepBoid(a.boid, center, vel, flock, params, step);
       a.x = a.boid.x;
       a.y = a.boid.y;
@@ -573,36 +670,27 @@ export class SwarmEngine {
   };
 
   private onPointerOut = (e: PointerEvent) => {
-    if (!e.relatedTarget) this.pointerVel = { x: 0, y: 0 };
+    if (!e.relatedTarget) {
+      this.pointerVel = { x: 0, y: 0 };
+    }
   };
 
   private listenPointer() {
-    if (this.listening || !isBrowser) return;
+    if (this.listening || !isBrowser) {
+      return;
+    }
     this.listening = true;
     window.addEventListener("pointermove", this.onPointerMove, { passive: true });
     window.addEventListener("pointerout", this.onPointerOut, { passive: true });
   }
 
   private unlistenPointer() {
-    if (!this.listening) return;
+    if (!this.listening) {
+      return;
+    }
     this.listening = false;
     window.removeEventListener("pointermove", this.onPointerMove);
     window.removeEventListener("pointerout", this.onPointerOut);
-  }
-
-  /** Top-down first, then whatever is closest to the cursor. */
-  private best(x: number, y: number, list: { task: Task; box: Box }[]) {
-    let bi = 0;
-    let bs = Infinity;
-    list.forEach(({ box }, i) => {
-      const d = Math.hypot(box.x - x, box.y - y);
-      const s = Math.max(0, box.y) + d * 0.5 + Math.random() * 30;
-      if (s < bs) {
-        bs = s;
-        bi = i;
-      }
-    });
-    return bi;
   }
 
   private spawn(target: Box): Agent {
@@ -617,12 +705,13 @@ export class SwarmEngine {
       { d: H - cy, p: { x: cx + rand(-220, 220), y: H + 30 } },
     ].sort((a, b) => a.d - b.d);
     const from = edges[Math.random() < 0.65 ? 0 : 1].p;
-    const n = this.seq++;
+    this.seq += 1;
+    const n = this.seq;
     const agent = new Agent(
       this,
       this.options.colors[n % this.options.colors.length],
       this.names[n % this.names.length],
-      from,
+      from
     );
     this.agents.push(agent);
     this.markStats();
@@ -631,7 +720,7 @@ export class SwarmEngine {
 
   removeAgent(agent: Agent) {
     const i = this.agents.indexOf(agent);
-    if (i >= 0) {
+    if (i !== -1) {
       this.agents.splice(i, 1);
       this.markStats();
     }
@@ -650,36 +739,56 @@ export class SwarmEngine {
 
   markStats() {
     this.statsDirty = true;
-    if (!this.raf) queueMicrotask(() => this.flushStats());
+    if (!this.raf) {
+      queueMicrotask(() => this.flushStats());
+    }
   }
 
   private flushStats() {
-    if (!this.statsDirty) return;
+    if (!this.statsDirty) {
+      return;
+    }
     this.statsDirty = false;
     let done = 0;
     let total = 0;
     for (const r of this.roots) {
       total += r.tasks.length;
-      for (const t of r.tasks) if (t.state === "done") done++;
+      for (const t of r.tasks) {
+        if (t.state === "done") {
+          done += 1;
+        }
+      }
     }
-    const team = this.agents.filter((a) => a.state !== "leaving").map((a) => ({ name: a.name, color: a.color }));
+    const team = this.agents.filter((a) => a.state !== "leaving").map((a) => ({ color: a.color, name: a.name }));
     const flocking = this.agents.some((a) => a.state === "flocking");
-    this.stats = { agents: team.length, done, total, building: this.roots.size, team, flocking };
-    for (const fn of this.listeners) fn();
+    this.stats = { agents: team.length, building: this.roots.size, done, flocking, team, total };
+    for (const fn of this.listeners) {
+      fn();
+    }
   }
 
   // ---- teardown ------------------------------------------------------------
 
   /** Restore every component, remove all cursors and the overlay. The engine can be used again afterwards. */
   dispose() {
-    for (const r of Array.from(this.registered)) r.reset();
-    for (const a of this.agents.slice()) a.destroy();
-    const anims = this.anims;
+    for (const r of [...this.registered]) {
+      r.reset();
+    }
+    for (const a of [...this.agents]) {
+      a.destroy();
+    }
+    const { anims } = this;
     this.anims = [];
-    for (const a of anims) a.reject(new Cancelled());
-    for (const l of Array.from(this.live)) (l as { destroy?: () => void }).destroy?.();
+    for (const a of anims) {
+      a.reject(new CancelledError());
+    }
+    for (const l of [...this.live]) {
+      (l as { destroy?: () => void }).destroy?.();
+    }
     this.live.clear();
-    if (this.raf) cancelAnimationFrame(this.raf);
+    if (this.raf) {
+      cancelAnimationFrame(this.raf);
+    }
     this.raf = 0;
     this.unlistenPointer();
     this.forcedFlock = false;
@@ -694,7 +803,9 @@ export class SwarmEngine {
 let defaultEngine: SwarmEngine | null = null;
 
 /** Engine used by components rendered outside a <SwarmProvider>. */
-export function getDefaultEngine(): SwarmEngine {
-  if (!defaultEngine) defaultEngine = new SwarmEngine();
+export const getDefaultEngine = (): SwarmEngine => {
+  if (!defaultEngine) {
+    defaultEngine = new SwarmEngine();
+  }
   return defaultEngine;
-}
+};

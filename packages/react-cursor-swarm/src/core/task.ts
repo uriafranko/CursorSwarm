@@ -1,6 +1,6 @@
 import type { Agent } from "./agent";
-import type { Layer, LayerKind } from "./scan";
 import type { SwarmRoot } from "./root";
+import type { Layer, LayerKind } from "./scan";
 import type { Token } from "./util";
 
 export type RevealEffect = "fade" | "sweep" | "none";
@@ -9,15 +9,19 @@ export class Task {
   state: "waiting" | "active" | "done" = "waiting";
   deps: Task[] = [];
   token: Token = { cancelled: false };
-  visuals = new Set<{ destroy(): void }>();
+  visuals = new Set<{ destroy: () => void }>();
   agent: Agent | null = null;
 
-  constructor(
-    readonly root: SwarmRoot,
-    readonly layer: Layer,
-    /** Ancestors that clip this element (overflow: hidden / scroll containers). */
-    readonly clipEls: Element[],
-  ) {}
+  readonly root: SwarmRoot;
+  readonly layer: Layer;
+  /** Ancestors that clip this element (overflow: hidden / scroll containers). */
+  readonly clipEls: Element[];
+
+  constructor(root: SwarmRoot, layer: Layer, clipEls: Element[]) {
+    this.root = root;
+    this.layer = layer;
+    this.clipEls = clipEls;
+  }
 
   get kind(): LayerKind {
     return this.layer.kind;
@@ -28,23 +32,36 @@ export class Task {
   }
 
   depsDone() {
-    for (const d of this.deps) if (d.state !== "done") return false;
+    for (const d of this.deps) {
+      if (d.state !== "done") {
+        return false;
+      }
+    }
     return true;
   }
 
   alive() {
-    if (!this.el.isConnected) return false;
-    if (this.layer.text && !this.layer.text.valid()) return false;
+    if (!this.el.isConnected) {
+      return false;
+    }
+    if (this.layer.text && !this.layer.text.valid()) {
+      return false;
+    }
     return true;
   }
 
   reveal(effect: RevealEffect = "fade") {
-    if (this.layer.text) this.layer.text.release();
-    else this.root.unhide(this.el, effect);
+    if (this.layer.text) {
+      this.layer.text.release();
+    } else {
+      this.root.unhide(this.el, effect);
+    }
   }
 
   complete() {
-    if (this.state === "done") return;
+    if (this.state === "done") {
+      return;
+    }
     this.state = "done";
     this.root.taskDone();
   }
@@ -57,6 +74,8 @@ export class Task {
 
   cancel() {
     this.token.cancelled = true;
-    for (const v of Array.from(this.visuals)) v.destroy();
+    for (const v of [...this.visuals]) {
+      v.destroy();
+    }
   }
 }

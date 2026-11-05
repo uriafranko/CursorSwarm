@@ -3,27 +3,31 @@
   "version": "0.1.0",
   "description": "Wrap any React component and watch a swarm of multiplayer cursors build it live: crosshair-drawn boxes, typed text, pen-tool lines and alt-drag duplicates.",
   "keywords": [
-    "react",
     "animation",
     "cursor",
     "cursors",
+    "design-tool",
     "multiplayer",
-    "swarm",
-    "typing",
+    "react",
     "reveal",
     "scroll-animation",
-    "design-tool"
+    "swarm",
+    "typing"
   ],
+  "homepage": "https://github.com/uriafranko/CursorSwarm/tree/main/packages/react-cursor-swarm#readme",
+  "bugs": {
+    "url": "https://github.com/uriafranko/CursorSwarm/issues"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/uriafranko/CursorSwarm.git",
     "directory": "packages/react-cursor-swarm"
   },
-  "homepage": "https://github.com/uriafranko/CursorSwarm/tree/main/packages/react-cursor-swarm#readme",
-  "bugs": {
-    "url": "https://github.com/uriafranko/CursorSwarm/issues"
-  },
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ],
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.cjs",
@@ -42,10 +46,6 @@
     },
     "./package.json": "./package.json"
   },
-  "files": [
-    "dist",
-    "CHANGELOG.md"
-  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -54,12 +54,6 @@
     "test:watch": "vitest",
     "check:package": "publint --strict && attw --pack .",
     "prepublishOnly": "npm run typecheck && npm test && npm run build && npm run check:package"
-  },
-  "peerDependencies": {
-    "react": "^18.0.0 || ^19.0.0"
-  },
-  "engines": {
-    "node": ">=18"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
@@ -71,5 +65,11 @@
     "react-dom": "^19.3.1",
     "tsup": "^9.0.0",
     "vitest": "^5.1.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

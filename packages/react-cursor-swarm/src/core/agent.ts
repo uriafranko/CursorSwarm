@@ -1,19 +1,12 @@
-import { cursorMarkup, HOTSPOT, type CursorMode } from "./cursors";
+import { cursorMarkup, HOTSPOT } from "./cursors";
+import type { CursorMode } from "./cursors";
 import type { Live, SwarmEngine } from "./engine";
-import { makeBoid, type Boid, type BoidOptions } from "./flock";
+import { makeBoid } from "./flock";
+import type { Boid, BoidOptions } from "./flock";
 import { div } from "./overlay";
 import type { Task } from "./task";
-import {
-  Cancelled,
-  clamp,
-  easeInCubic,
-  easeInOutQuad,
-  easeReach,
-  rand,
-  type Ease,
-  type Point,
-  type Token,
-} from "./util";
+import { CancelledError, clamp, easeInCubic, easeInOutQuad, easeReach, rand } from "./util";
+import type { Ease, Point, Token } from "./util";
 
 export type Target = Point | (() => Point | null);
 
@@ -48,12 +41,14 @@ export class Agent implements Live {
   private wanderTok: Token | null = null;
   private dead = false;
 
-  constructor(
-    private engine: SwarmEngine,
-    readonly color: string,
-    readonly name: string,
-    start: Point,
-  ) {
+  private engine: SwarmEngine;
+  readonly color: string;
+  readonly name: string;
+
+  constructor(engine: SwarmEngine, color: string, name: string, start: Point) {
+    this.engine = engine;
+    this.color = color;
+    this.name = name;
     this.x = start.x;
     this.y = start.y;
     this.idleSince = engine.time;
@@ -62,7 +57,7 @@ export class Agent implements Live {
     this.el.style.color = color;
     this.svg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
     this.svg.setAttribute("viewBox", "0 0 24 24");
-    this.el.appendChild(this.svg);
+    this.el.append(this.svg);
     if (engine.options.labels) {
       const label = div("name", this.el);
       label.textContent = name;
@@ -92,7 +87,9 @@ export class Agent implements Live {
     let nearDone = !o.near;
     return this.engine.animate(dur, token, (k) => {
       const p = resolve();
-      if (p) last = p;
+      if (p) {
+        last = p;
+      }
       const e = ease(k);
       const dx = last.x - fx;
       const dy = last.y - fy;
@@ -121,19 +118,24 @@ export class Agent implements Live {
 
   /** Small idle drift so waiting cursors feel alive. */
   wander() {
-    if (this.wanderTok || this.state !== "idle") return;
+    if (this.wanderTok || this.state !== "idle") {
+      return;
+    }
     const tok: Token = { cancelled: false };
     this.wanderTok = tok;
     const p = {
       x: clamp(this.x + rand(-46, 46), 12, window.innerWidth - 12),
       y: clamp(this.y + rand(-34, 34), 12, window.innerHeight - 12),
     };
-    this.moveTo(p, tok, { dur: rand(900, 1700), ease: easeInOutQuad, bend: rand(-0.35, 0.35) }).then(
-      () => {
-        if (this.wanderTok === tok) this.wanderTok = null;
-      },
-      () => {},
-    );
+    this.moveTo(p, tok, { bend: rand(-0.35, 0.35), dur: rand(900, 1700), ease: easeInOutQuad })
+      .then(() => {
+        if (this.wanderTok === tok) {
+          this.wanderTok = null;
+        }
+        return null;
+      })
+      // A cancelled wander just stops; stopWander() has already cleared the token.
+      .catch(() => null);
   }
 
   stopWander() {
@@ -152,10 +154,14 @@ export class Agent implements Live {
     task.agent = this;
     try {
       await this.engine.runScript(this, task);
-    } catch (e) {
-      if (!(e instanceof Cancelled)) console.error("[react-cursor-swarm]", e);
+    } catch (error) {
+      if (!(error instanceof CancelledError)) {
+        console.error("[react-cursor-swarm]", error);
+      }
     } finally {
-      if (task.state === "active" && !task.token.cancelled) task.skip();
+      if (task.state === "active" && !task.token.cancelled) {
+        task.skip();
+      }
       task.agent = null;
       this.task = null;
       this.down = false;
@@ -169,7 +175,9 @@ export class Agent implements Live {
 
   /** Join the flock orbiting the pointer. The engine integrates the physics each frame. */
   startFlock(orbit: BoidOptions) {
-    if (this.state !== "idle") return;
+    if (this.state !== "idle") {
+      return;
+    }
     this.stopWander();
     this.state = "flocking";
     this.mode = "arrow";
@@ -178,7 +186,9 @@ export class Agent implements Live {
   }
 
   stopFlock() {
-    if (this.state !== "flocking") return;
+    if (this.state !== "flocking") {
+      return;
+    }
     this.state = "idle";
     this.boid = null;
     this.idleSince = this.engine.time;
@@ -187,7 +197,9 @@ export class Agent implements Live {
 
   /** Fly off the nearest screen edge, then disappear. */
   async leave() {
-    if (this.state === "leaving") return;
+    if (this.state === "leaving") {
+      return;
+    }
     this.stopWander();
     this.stopFlock();
     this.state = "leaving";
@@ -225,7 +237,9 @@ export class Agent implements Live {
   }
 
   destroy() {
-    if (this.dead) return;
+    if (this.dead) {
+      return;
+    }
     this.dead = true;
     this.stopWander();
     this.el.remove();

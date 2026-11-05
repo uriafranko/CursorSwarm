@@ -1,10 +1,11 @@
-import { isBrowser, toBox, type Box } from "./util";
+import { isBrowser, toBox } from "./util";
+import type { Box } from "./util";
 
 export const HIGHLIGHT_NAME = "swarm-untyped";
 
 interface HighlightLike {
-  add(r: AbstractRange): void;
-  delete(r: AbstractRange): boolean;
+  add: (r: AbstractRange) => void;
+  delete: (r: AbstractRange) => boolean;
   priority?: number;
 }
 
@@ -14,15 +15,21 @@ let cached: HighlightLike | null | undefined;
  * Untyped text is hidden with the CSS Custom Highlight API: the real text stays laid out
  * exactly where it is (no reflow, no DOM mutation), it is just painted transparent until typed.
  */
-function registry(): HighlightLike | null {
-  if (cached !== undefined) return cached;
+const registry = (): HighlightLike | null => {
+  if (cached !== undefined) {
+    return cached;
+  }
   cached = null;
-  if (!isBrowser) return null;
+  if (!isBrowser) {
+    return null;
+  }
   const g = globalThis as unknown as {
     CSS?: { highlights?: Map<string, HighlightLike> };
     Highlight?: new () => HighlightLike;
   };
-  if (!g.CSS?.highlights || typeof g.Highlight !== "function") return null;
+  if (!g.CSS?.highlights || typeof g.Highlight !== "function") {
+    return null;
+  }
   let h = g.CSS.highlights.get(HIGHLIGHT_NAME);
   if (!h) {
     h = new g.Highlight();
@@ -31,7 +38,7 @@ function registry(): HighlightLike | null {
   }
   cached = h;
   return h;
-}
+};
 
 export const canType = () => registry() !== null;
 
@@ -48,30 +55,33 @@ export class TextBlock {
   readonly steps: Step[] = [];
   private hidden: Range | null = null;
 
-  constructor(
-    readonly nodes: Text[],
-    preserveWhitespace: boolean,
-  ) {
+  readonly nodes: Text[];
+
+  constructor(nodes: Text[], preserveWhitespace: boolean) {
+    this.nodes = nodes;
     let prevSpace = true;
-    nodes.forEach((node, n) => {
+    for (const [n, node] of nodes.entries()) {
       const d = node.data;
-      for (let o = 0; o < d.length; o++) {
+      for (let o = 0; o < d.length; o += 1) {
         let ch = d[o];
+        // oxlint-disable-next-line unicorn/prefer-code-point -- surrogate-pair check needs UTF-16 code units
         const code = d.charCodeAt(o);
-        if (code >= 0xd800 && code <= 0xdbff && o + 1 < d.length) {
+        if (code >= 0xd8_00 && code <= 0xdb_ff && o + 1 < d.length) {
           ch += d[o + 1];
-          o++;
+          o += 1;
         }
-        const space = /\s/.test(ch);
+        const space = /\s/u.test(ch);
         if (!preserveWhitespace && space && prevSpace) {
           // Collapsed whitespace renders as nothing: fold it into the previous keystroke.
-          if (this.steps.length) this.steps[this.steps.length - 1] = { n, o: o + 1, ch: " " };
+          if (this.steps.length) {
+            this.steps[this.steps.length - 1] = { ch: " ", n, o: o + 1 };
+          }
           continue;
         }
         prevSpace = space;
-        this.steps.push({ n, o: o + 1, ch });
+        this.steps.push({ ch, n, o: o + 1 });
       }
-    });
+    }
   }
 
   get length() {
@@ -83,13 +93,19 @@ export class TextBlock {
   }
 
   valid() {
-    for (const n of this.nodes) if (!n.isConnected) return false;
+    for (const n of this.nodes) {
+      if (!n.isConnected) {
+        return false;
+      }
+    }
     return true;
   }
 
   hide(): boolean {
     const h = registry();
-    if (!h || !this.nodes.length) return false;
+    if (!h || !this.nodes.length) {
+      return false;
+    }
     const r = document.createRange();
     const last = this.nodes[this.nodes.length - 1];
     try {
@@ -106,7 +122,9 @@ export class TextBlock {
   /** Reveal everything up to and including step `i`. Returns false if the DOM changed under us. */
   show(i: number): boolean {
     const s = this.steps[i];
-    if (!s || !this.hidden || !this.valid()) return false;
+    if (!s || !this.hidden || !this.valid()) {
+      return false;
+    }
     try {
       this.hidden.setStart(this.nodes[s.n], Math.min(s.o, this.nodes[s.n].length));
     } catch {
@@ -123,7 +141,9 @@ export class TextBlock {
   }
 
   rect(): Box | null {
-    if (!this.valid()) return null;
+    if (!this.valid()) {
+      return null;
+    }
     const r = document.createRange();
     const last = this.nodes[this.nodes.length - 1];
     r.setStart(this.nodes[0], 0);
@@ -135,7 +155,9 @@ export class TextBlock {
   /** Caret position (right edge of the last revealed character). */
   caret(i: number): Box | null {
     const s = this.steps[i];
-    if (!s || !this.valid()) return null;
+    if (!s || !this.valid()) {
+      return null;
+    }
     const node = this.nodes[s.n];
     const end = Math.min(s.o, node.length);
     const start = Math.max(0, end - (s.ch.length || 1));
@@ -144,21 +166,27 @@ export class TextBlock {
     r.setEnd(node, end);
     const rects = r.getClientRects();
     const last = rects[rects.length - 1];
-    if (!last || last.height === 0) return null;
-    return { x: last.right, y: last.top, w: 0, h: last.height };
+    if (!last || last.height === 0) {
+      return null;
+    }
+    return { h: last.height, w: 0, x: last.right, y: last.top };
   }
 
   /** Caret before the first character, used before any key has been pressed. */
   start(): Box | null {
-    if (!this.steps.length || !this.valid()) return null;
-    const s = this.steps[0];
+    if (!this.steps.length || !this.valid()) {
+      return null;
+    }
+    const [s] = this.steps;
     const node = this.nodes[s.n];
     const end = Math.min(s.o, node.length);
     const r = document.createRange();
     r.setStart(node, Math.max(0, end - (s.ch.length || 1)));
     r.setEnd(node, end);
-    const first = r.getClientRects()[0];
-    if (!first || first.height === 0) return null;
-    return { x: first.left, y: first.top, w: 0, h: first.height };
+    const [first] = r.getClientRects();
+    if (!first || first.height === 0) {
+      return null;
+    }
+    return { h: first.height, w: 0, x: first.left, y: first.top };
   }
 }
