@@ -1,7 +1,7 @@
 import { Agent } from "./agent";
 import { stepBoid } from "./flock";
 import { Overlay } from "./overlay";
-import { HIDE_ATTR } from "./root";
+import { HIDE_ATTR, STILL_ATTR } from "./root";
 import type { SwarmRoot } from "./root";
 import type { Detail } from "./scan";
 import { runScript } from "./scripts";
@@ -123,6 +123,7 @@ export const DEFAULT_NAMES = [
 
 const GLOBAL_CSS = `
 [${HIDE_ATTR}] { visibility: hidden !important; }
+[${STILL_ATTR}], [${STILL_ATTR}] * { transition: none !important; }
 ::highlight(${HIGHLIGHT_NAME}) {
   color: transparent;
   -webkit-text-fill-color: transparent;
@@ -277,6 +278,12 @@ export class SwarmEngine {
   }
 
   // ---- overlay -------------------------------------------------------------
+
+  /** Add the page-wide rules (hiding, transition freeze, text highlight) if they aren't there yet. */
+  // oxlint-disable-next-line class-methods-use-this -- engine API; callers needn't know the styles are page-global
+  ensureStyles() {
+    injectGlobalCss();
+  }
 
   private ensureOverlay(): Overlay {
     if (!this.overlay) {

@@ -11,3 +11,4 @@ First release.
 - `detail` on `<SwarmProvider>` sets the default for every `<Swarm>` inside it.
 - `prefers-reduced-motion` support and SSR-safe rendering.
 - The `agents` limit can change live, through the provider prop or `engine.setAgents(n)`. When it drops, the extra cursors leave once they're free.
+- Works with `transition-all` (Tailwind, shadcn/ui): CSS transitions are switched off while a component is pending, scanned and hidden, so buttons and badges no longer appear before they're built or stay on screen when a component is replayed.

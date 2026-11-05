@@ -5,6 +5,13 @@ import { Task } from "./task";
 import type { RevealEffect } from "./task";
 
 export const HIDE_ATTR = "data-swarm-hide";
+/**
+ * Switches CSS transitions off on an element and everything inside it. A transition that covers
+ * `visibility` (Tailwind's `transition-all`, used by most shadcn/ui controls) keeps an element
+ * visible for its whole duration after it's hidden, and makes it read as hidden mid-way through
+ * becoming visible. Neither may happen while the swarm reads and hides a component.
+ */
+export const STILL_ATTR = "data-swarm-still";
 
 export interface RootOptions {
   /**
@@ -52,6 +59,28 @@ export class SwarmRoot {
       this.options.onComplete?.();
       return;
     }
+    this.engine.ensureStyles();
+    for (const el of els) {
+      el.setAttribute(STILL_ATTR, "");
+    }
+    try {
+      this.queue(els);
+    } finally {
+      for (const el of els) {
+        el.removeAttribute(STILL_ATTR);
+      }
+    }
+
+    this.state = "building";
+    this.engine.attach(this);
+    this.options.onStart?.();
+    if (this.tasks.every((t) => t.state === "done")) {
+      this.finish();
+    }
+  }
+
+  /** Scan the component, turn its layers into tasks and hide them. Runs with transitions off. */
+  private queue(els: Element[]) {
     const layers = scan(els, {
       detail: this.options.detail ?? this.engine.options.detail,
       duplicates: this.options.duplicates ?? true,
@@ -112,11 +141,10 @@ export class SwarmRoot {
       }
     }
 
-    this.state = "building";
-    this.engine.attach(this);
-    this.options.onStart?.();
-    if (this.tasks.every((t) => t.state === "done")) {
-      this.finish();
+    // Resolve styles now, while transitions are still off: the hidden state then counts as the
+    // "before" style when they come back on, so nothing transitions out of view.
+    for (const el of this.hidden) {
+      void getComputedStyle(el).visibility;
     }
   }
 

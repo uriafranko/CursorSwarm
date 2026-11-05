@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ElementType, ForwardedRef, HTMLAttributes, ReactNode } from "react";
 
-import { SwarmRoot } from "../core/root";
+import { STILL_ATTR, SwarmRoot } from "../core/root";
 import type { Detail } from "../core/scan";
 import { useDefaultDetail, useSwarmEngine } from "./context";
 
@@ -176,9 +176,12 @@ const SwarmComponent = (
   if (pending) {
     merged.visibility = "hidden";
   }
+  // While pending, transitions inside are off: a `transition-all` button would otherwise stay
+  // visible for the length of its transition after the component is hidden (e.g. on a replay).
+  const still = pending ? { [STILL_ATTR]: "" } : undefined;
 
   return (
-    <Tag ref={wrapper} data-swarm-root="" style={merged} {...rest}>
+    <Tag ref={wrapper} data-swarm-root="" {...still} style={merged} {...rest}>
       {children}
     </Tag>
   );

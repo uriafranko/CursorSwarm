@@ -101,8 +101,11 @@ describe("react", () => {
       act(() => root.render(manualView(false)));
       const wrapper = container.firstElementChild as HTMLElement;
       expect(wrapper.style.visibility).toBe("hidden");
+      // Transitions stay off while it's hidden, so nothing inside lingers on screen.
+      expect(wrapper.hasAttribute("data-swarm-still")).toBeTruthy();
       act(() => root.render(manualView(true)));
       expect(wrapper.style.visibility).toBe("");
+      expect(wrapper.hasAttribute("data-swarm-still")).toBeFalsy();
       expect(container.querySelector(".card")?.hasAttribute("data-swarm-hide")).toBeTruthy();
     });
 

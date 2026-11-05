@@ -8,6 +8,8 @@
   "type": "module",
   "scripts": {
     "dev": "npm run build -w react-cursor-swarm && concurrently -k -n lib,demo -c blue,magenta \"npm run dev -w react-cursor-swarm\" \"npm run dev -w react-cursor-swarm-demo\"",
+    "dev:dashboard": "npm run build -w react-cursor-swarm && concurrently -k -n lib,dashboard -c blue,magenta \"npm run dev -w react-cursor-swarm\" \"npm run dev -w react-cursor-swarm-shadcn-dashboard\"",
+    "dev:kanban": "npm run build -w react-cursor-swarm && concurrently -k -n lib,kanban -c blue,magenta \"npm run dev -w react-cursor-swarm\" \"npm run dev -w react-cursor-swarm-shadcn-kanban\"",
     "build": "npm run build --workspaces --if-present",
     "test": "npm test -w react-cursor-swarm",
     "lint": "ultracite check",

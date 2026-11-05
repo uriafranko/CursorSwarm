@@ -134,6 +134,13 @@ npm run dev
 
 Then open http://localhost:5178. See [CONTRIBUTING.md](CONTRIBUTING.md) for scripts and releasing.
 
+Two more examples are built with [shadcn/ui](https://ui.shadcn.com) and Tailwind CSS v4:
+
+| Example | Run | Shows |
+| --- | --- | --- |
+| [Analytics dashboard](examples/shadcn-dashboard) | `npm run dev:dashboard` | Sidebar layout, Recharts, data table, and a panel that changes every swarm option live |
+| [Kanban board](examples/shadcn-kanban) | `npm run dev:kanban` | Building dialogs, sheets, tabs and newly created cards on demand; cursors as presence |
+
 ## License
 
 MIT

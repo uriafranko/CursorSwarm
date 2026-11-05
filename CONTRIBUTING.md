@@ -4,6 +4,8 @@
 | ------------------------------------------------------------ | ----------------------------------------------- |
 | [`packages/react-cursor-swarm`](packages/react-cursor-swarm) | The published package                           |
 | [`examples/demo`](examples/demo)                             | Vite demo app that consumes the package by name |
+| [`examples/shadcn-dashboard`](examples/shadcn-dashboard)     | shadcn/ui + Tailwind analytics dashboard        |
+| [`examples/shadcn-kanban`](examples/shadcn-kanban)           | shadcn/ui + Tailwind kanban board               |
 
 ## Develop
 
@@ -14,14 +16,16 @@ npm install
 npm run dev     # builds the package in watch mode + starts the demo at http://localhost:5178
 ```
 
-| Script              |                                                                             |
-| ------------------- | --------------------------------------------------------------------------- |
-| `npm run dev`       | Package (`tsup --watch`) and demo (Vite) together                           |
-| `npm test`          | Unit and component tests (Vitest + jsdom)                                   |
-| `npm run lint`      | [Ultracite](https://www.ultracite.ai) check: Oxlint + Oxfmt, no writes      |
-| `npm run fix`       | Ultracite fix: applies lint autofixes and formats                           |
-| `npm run typecheck` | TypeScript for the package and the demo                                     |
-| `npm run check`     | Everything CI runs: lint + format check, typecheck, tests, publint and attw |
+| Script                  |                                                                             |
+| ----------------------- | --------------------------------------------------------------------------- |
+| `npm run dev`           | Package (`tsup --watch`) and demo (Vite) together                           |
+| `npm run dev:dashboard` | Same, with the shadcn dashboard example at http://localhost:5179            |
+| `npm run dev:kanban`    | Same, with the shadcn kanban example at http://localhost:5180               |
+| `npm test`              | Unit and component tests (Vitest + jsdom)                                   |
+| `npm run lint`          | [Ultracite](https://www.ultracite.ai) check: Oxlint + Oxfmt, no writes      |
+| `npm run fix`           | Ultracite fix: applies lint autofixes and formats                           |
+| `npm run typecheck`     | TypeScript for the package and the demo                                     |
+| `npm run check`         | Everything CI runs: lint + format check, typecheck, tests, publint and attw |
 
 The demo depends on `"react-cursor-swarm": "*"`, which npm workspaces link to `packages/react-cursor-swarm`. It imports the package's built `dist/` through its `exports` map, exactly like an app installing it from npm would.
 
